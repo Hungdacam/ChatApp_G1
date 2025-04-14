@@ -8,7 +8,6 @@ const protectRoute = async (req, res, next) => {
         // 1. Lấy token từ cookie hoặc Authorization header
         if (req.cookies && req.cookies.jwt) {
             token = req.cookies.jwt; // từ cookie (web)
-            console.log("Token from cookie:", token);  // Debug log
         } else if (
             req.headers.authorization &&
             req.headers.authorization.startsWith('Bearer ')

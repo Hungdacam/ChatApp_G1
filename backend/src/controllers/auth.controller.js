@@ -333,6 +333,31 @@ const changePassword = async (req, res) => {
   }
 };
 
+const findByPhone = async (req, res) => {
+  const { phone } = req.body;
+
+  try {
+    const user = await User.findOne({ phone });
+
+    if (!user) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng" });
+    }
+
+    return res.status(200).json({
+      id: user._id,
+      name: user.name,
+      avatar: user.avatar,
+      phone: user.phone,
+      email: user.email,
+      dob: user.dob,
+      gender: user.gender,
+    });
+  } catch (error) {
+    console.error("Lỗi tìm người dùng:", error.message);
+    return res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
 module.exports = {
   sendSignupOTP,
   verifyAndSignup,
@@ -343,5 +368,6 @@ module.exports = {
   sendForgotPasswordOTP,
   verifyForgotPasswordOTP,
   resetPassword,
-  changePassword
+  changePassword,
+  findByPhone
 };

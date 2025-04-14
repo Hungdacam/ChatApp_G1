@@ -9,7 +9,8 @@ const {
   sendForgotPasswordOTP,
   verifyForgotPasswordOTP,
   resetPassword,
-  changePassword
+  changePassword,
+  findByPhone
 } = require('../controllers/auth.controller');
 
 const protectRoute = require('../middleware/auth.middleware');
@@ -44,5 +45,7 @@ router.post('/send-forgot-otp', sendForgotPasswordOTP);
 router.post('/verify-otp', verifyForgotPasswordOTP);
 // Đổi mật khẩu
 router.post('/reset-password', resetPassword);
+// Tim friend by phone
+router.post("/find-user-by-phone", protectRoute, findByPhone);
 
 module.exports = router;
