@@ -6,5 +6,6 @@ const authMiddleware = require("../middleware/auth.middleware");
 router.post("/send", authMiddleware, chatController.sendMessage);
 router.get("/messages/:chatId", authMiddleware, chatController.getMessages);
 router.get("/list", authMiddleware, chatController.getChatList);
+router.post("/mark-read", authMiddleware, chatController.markAsRead);
 
 module.exports = router;

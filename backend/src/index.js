@@ -2,8 +2,7 @@ const express = require('express');
 const authRoutes = require('./routes/auth.route');
 const messageRoutes = require('./routes/message.route');
 const friendRoutes = require('./routes/friends.route');
-// ❌ Xoá vì không cần nữa:
-// const otpRoutes = require("./routes/otp.route");
+const chatRoutes = require('./routes/chat.route')
 const http = require('http');
 const socketio = require('socket.io');
 
@@ -33,7 +32,7 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 // 🚀 Đăng ký các route
 app.use('/api/auth', authRoutes);
 app.use('/api/message', messageRoutes);
-app.use("/api/chat", require("./routes/chat.route"));
+app.use("/api/chat", chatRoutes);
 app.use('/api/friends', friendRoutes);
 
 const server = http.createServer(app);
@@ -65,7 +64,13 @@ io.on('connection', (socket) => {
     socket.on('disconnect', () => {
        
         console.log('Người dùng đã ngắt kết nối: ' + socket.id);
-        
+        for (const [userId, sockId] of onlineUsers.entries()) {
+            if (sockId === socket.id) {
+              onlineUsers.delete(userId);
+              console.log(`🗑️ Đã xoá user ${userId} khỏi onlineUsers`);
+              break;
+            }
+          }
     });
     
 });
