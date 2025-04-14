@@ -1,52 +1,64 @@
+// App.jsx
 import { Routes, Route, Navigate } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import HomePage from "./pages/HomePage";
 import SignUpPage from "./pages/SignUpPage";
-import VerifyOTPPage from "./pages/VerifyOTPPage"; // Thêm import
+import VerifyOTPPage from "./pages/VerifyOTPPage";
 import LoginPage from "./pages/LoginPage";
 import SettingsPage from "./pages/SettingsPage";
 import ProfilePage from "./pages/ProfilePage";
 import useAuthStore from "./store/useAuthStore";
 import { useEffect } from "react";
-import { Loader } from "lucide-react";
 import { Toaster } from "react-hot-toast";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
+import SearchFriendPage from "./pages/SearchFriendPage";
+import AddFriendPage from "./pages/AddFriendPage";
+import { useSocketStore } from "./store/useSocketStore";
+import { useFriendStore } from "./store/useFriendStore";
+import FriendRequestsPage from "./pages/FriendRequestsPage";
 const App = () => {
   const { authUser, checkAuth, isCheckingAuth } = useAuthStore();
+  const { socket, connectSocket } = useSocketStore();
+  const { setupSocketListeners } = useFriendStore();
 
   useEffect(() => {
-    checkAuth();
-  }, [checkAuth]);
+    if (authUser) {
+      console.log(authUser.token,'.....', authUser._id)
+      connectSocket(authUser.token, authUser._id); // Truyền userId
+    }
+  }, [authUser]);
 
-  // Hiển thị loading khi đang kiểm tra trạng thái đăng nhập
-  if (isCheckingAuth) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <Loader className="size-10 animate-spin" />
-      </div>
-    );
-  }
+  useEffect(() => {
+    if (socket) {
+      setupSocketListeners(); // Chỉ gọi khi socket sẵn sàng
+    }
+  }, [socket]);
 
   return (
     <div>
       <Navbar />
       <Routes>
-        {/* Trang chính - yêu cầu đăng nhập */}
-        <Route path="/" element={authUser ? <HomePage /> : <Navigate to="/login" />} />
-        {/* Trang đăng ký - chỉ cho phép khi chưa đăng nhập */}
-        <Route path="/signup" element={!authUser ? <SignUpPage /> : <Navigate to="/" />} />
-        {/* Trang xác minh OTP - cho phép khi chưa đăng nhập */}
-        <Route path="/verify-otp" element={!authUser ? <VerifyOTPPage /> : <Navigate to="/" />} />
-        {/* Trang đăng nhập - chỉ cho phép khi chưa đăng nhập */}
-        <Route path="/login" element={!authUser ? <LoginPage /> : <Navigate to="/" />} />
-        {/* Trang cài đặt - yêu cầu đăng nhập */}
-        <Route path="/settings" element={authUser ? <SettingsPage /> : <Navigate to="/login" />} />
-        {/* Trang hồ sơ - yêu cầu đăng nhập */}
-        <Route path="/profile" element={authUser ? <ProfilePage /> : <Navigate to="/login" />} />
-
-        <Route path="/forgot-password" element={!authUser ? <ForgotPasswordPage /> : <Navigate to="/" />} />
+        <Route path="/login" element={!authUser ? <LoginPage /> : <Navigate to="/" replace />} />
+        <Route path="/signup" element={!authUser ? <SignUpPage /> : <Navigate to="/" replace />} />
+        <Route path="/verify-otp" element={!authUser ? <VerifyOTPPage /> : <Navigate to="/" replace />} />
+        <Route path="/forgot-password" element={!authUser ? <ForgotPasswordPage /> : <Navigate to="/login" replace />} />
+        <Route path="/" element={authUser ? <HomePage /> : <Navigate to="/login" replace />} />
+        <Route path="/settings" element={authUser ? <SettingsPage /> : <Navigate to="/login" replace />} />
+        <Route path="/profile" element={authUser ? <ProfilePage /> : <Navigate to="/login" replace />} />
+        <Route path="/search" element={authUser ? <SearchFriendPage /> : <Navigate to="/login" replace />} />
+        <Route path="/add-friend" element={authUser ? <AddFriendPage /> : <Navigate to="/login" replace />} />
+        <Route path="/friend-requests" element={authUser ? <FriendRequestsPage /> : <Navigate to="/login" replace />} />
       </Routes>
-      <Toaster />
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          duration: 5000,
+          style: {
+            background: "#333",
+            color: "#fff",
+          },
+        }}
+      />
     </div>
   );
 };

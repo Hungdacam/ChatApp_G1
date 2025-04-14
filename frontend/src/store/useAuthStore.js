@@ -22,7 +22,7 @@ const useAuthStore = create((set) => ({
       }
 
       const res = await axiosInstance.get("/auth/check");
-      set({ authUser: res.data });
+      set({ authUser: res.data.user || res.data });
     } catch (error) {
       console.log("Lỗi kiểm tra auth:", error.message);
       set({ authUser: null });
@@ -203,6 +203,21 @@ const useAuthStore = create((set) => ({
       return { success: false, message: error.response?.data?.message || "Lỗi hệ thống" };
     }
   },
+  //find user
+  findOneUser: async (identifier) => {
+    try {
+      const res = await axiosInstance.post("/auth/find-user-by-phone", {
+        phone: identifier,
+      });
+      return res.data;
+    } catch (error) {
+      console.error("Error in findOneUser:", error);
+      const errorMessage = error.response?.data?.message || "Không thể tìm thấy người dùng.";
+      toast.error(errorMessage);
+      throw new Error(errorMessage);
+    }
+  }
+  
 }));
 
 export default useAuthStore;
