@@ -66,7 +66,7 @@ const ChatContainer = () => {
                 className={`message ${isCurrentUser ? "sent" : "received"}`}
               >
                 <div className="message-content">
-                  {message.content}
+                <div className="message-content whitespace-pre-wrap break-words">{message.content}</div>
                   
                   {/* Hiển thị trạng thái tin nhắn */}
                   {isCurrentUser && (

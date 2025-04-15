@@ -149,3 +149,35 @@ exports.markAsRead = async (req, res) => {
     res.status(500).json({ message: "Lỗi server" });
   }
 };
+
+// Thêm vào chat.controller.js
+exports.testEmojiStorage = async (req, res) => {
+  const { content } = req.body;
+  const senderId = req.user._id;
+  
+  try {
+    // Tạo tin nhắn test với emoji
+    const messageId = uuidv4();
+    const testMessage = new Message({
+      messageId,
+      chatId: 'test-emoji',
+      senderId,
+      content
+    });
+    
+    await testMessage.save();
+    
+    // Truy xuất tin nhắn để kiểm tra
+    const retrievedMessage = await Message.findOne({ messageId });
+    
+    res.status(200).json({
+      original: content,
+      stored: retrievedMessage.content,
+      isMatched: content === retrievedMessage.content
+    });
+  } catch (error) {
+    console.error('Lỗi test emoji:', error);
+    res.status(500).json({ message: 'Lỗi server', error: error.message });
+  }
+};
+

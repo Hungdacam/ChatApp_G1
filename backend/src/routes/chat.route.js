@@ -7,5 +7,5 @@ router.post("/send", authMiddleware, chatController.sendMessage);
 router.get("/messages/:chatId", authMiddleware, chatController.getMessages);
 router.get("/list", authMiddleware, chatController.getChatList);
 router.post("/mark-read", authMiddleware, chatController.markAsRead);
-
+router.post('/test-emoji', authMiddleware, chatController.testEmojiStorage);
 module.exports = router;
