@@ -106,7 +106,7 @@ const ProfilePage = () => {
   }
 
   return (
-    <div className="h-screen pt-20">
+    <div className="min-h-screen pt-20 overflow-y-auto">
       <div className="max-w-2xl mx-auto p-4 py-8">
         <div className="bg-base-300 rounded-xl p-6 space-y-8">
           <div className="text-center">
@@ -120,7 +120,7 @@ const ProfilePage = () => {
               <img
                 src={selectedImg || authUser.avatar || "/avatar.png"}
                 alt="Profile"
-                className="size-32 rounded-full object-cover border-4"
+                className="w-32 h-32 rounded-full object-cover border-4"
               />
               <label
                 htmlFor="avatar-upload"
@@ -163,7 +163,7 @@ const ProfilePage = () => {
                   name="name"
                   value={formData.name}
                   onChange={handleInputChange}
-                  className="w-full px-4 py-2.5 bg-base-200 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full box-border px-4 py-2.5 bg-base-200 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
                   placeholder="Enter your name"
                 />
                 {errors.name && <p className="text-sm text-red-500">{errors.name}</p>}

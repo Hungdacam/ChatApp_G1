@@ -51,7 +51,7 @@ const AddFriendPage = () => {
       <div className="max-w-2xl mx-auto p-4 py-8">
         <div className="bg-base-300 rounded-xl p-6 space-y-8">
           <div className="text-center">
-            <h1 className="text-2xl font-semibold">Thông tin người dùng</h1>
+            <h1 className="text-2xl font-semibold mt-8">Thông tin người dùng</h1>
             <p className="mt-2 text-zinc-500">Chi tiết người bạn muốn kết bạn</p>
           </div>
 

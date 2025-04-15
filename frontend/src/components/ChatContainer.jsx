@@ -14,32 +14,27 @@ const ChatContainer = () => {
   } = useChatStore();
   const messageEndRef = useRef(null);
 
-  // Lấy tin nhắn khi selectedChat thay đổi
   useEffect(() => {
     if (selectedChat && selectedChat.chatId) {
-      console.log("Lấy tin nhắn cho chat:", selectedChat.chatId);
       getMessages(selectedChat.chatId);
     }
   }, [selectedChat, getMessages]);
 
-  // Cuộn xuống cuối danh sách tin nhắn khi có tin nhắn mới
   useEffect(() => {
     if (messageEndRef.current && messages.length > 0) {
       messageEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages]);
 
-  // Hiển thị khi không có chat nào được chọn
   if (!selectedChat) {
     return <NoChatSelected />;
   }
 
-  // Hiển thị khung skeleton khi đang tải tin nhắn
   if (isMessagesLoading) {
     return (
-      <div className="flex flex-col h-full">
+      <div className="flex flex-col h-full w-full">
         <ChatHeader />
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto p-4 w-full">
           {[...Array(5)].map((_, index) => (
             <MessageSkeleton key={index} />
           ))}
@@ -50,9 +45,9 @@ const ChatContainer = () => {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full w-full bg-white-900">
       <ChatHeader />
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-4 w-full">
         {messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <p className="text-gray-500">Chưa có tin nhắn nào</p>
@@ -61,14 +56,15 @@ const ChatContainer = () => {
           messages.map((message) => {
             const isCurrentUser = message.senderId._id === localStorage.getItem("userId");
             return (
-              <div 
-                key={message.messageId} 
-                className={`message ${isCurrentUser ? "sent" : "received"}`}
-              >
+              <div key={message.messageId} className={`message ${isCurrentUser ? "sent" : "received"} w-full`}>
                 <div className="message-content">
-                <div className="message-content whitespace-pre-wrap break-words">{message.content}</div>
-                  
-                  {/* Hiển thị trạng thái tin nhắn */}
+                  {message.video ? (
+                    <video src={message.video} controls className="w-full max-w-2xl rounded mb-1" />
+                  ) : null}
+                  {message.content && (
+                    <div className="whitespace-pre-wrap break-words">{message.content}</div>
+                  )}
+
                   {isCurrentUser && (
                     <span className="message-status ml-1 text-xs text-gray-400">
                       {message.isPending && <span title="Đang gửi">⏳</span>}

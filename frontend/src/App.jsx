@@ -16,12 +16,14 @@ import AddFriendPage from "./pages/AddFriendPage";
 import { useSocketStore } from "./store/useSocketStore";
 import { useFriendStore } from "./store/useFriendStore";
 import FriendRequestsPage from "./pages/FriendRequestsPage";
+import { useThemeStore } from "./store/useThemeStore";
 
 const App = () => {
   const { authUser } = useAuthStore(); // Không cần setOnlineUsers từ useAuthStore nữa
   const { socket, connectSocket, disconnectSocket, setOnlineUsers } = useSocketStore(); // Lấy setOnlineUsers từ useSocketStore
   const { setupSocketListeners } = useFriendStore();
   const [isSocketReady, setIsSocketReady] = useState(false);
+  const {theme}= useThemeStore();
 
   useEffect(() => {
     if (authUser) {
@@ -60,7 +62,7 @@ const App = () => {
   }, [socket, setupSocketListeners]);
 
   return (
-    <div>
+    <div data-theme={theme}>
       <Navbar />
       <Routes>
         <Route
@@ -81,6 +83,7 @@ const App = () => {
             !authUser ? <ForgotPasswordPage /> : <Navigate to="/login" replace />
           }
         />
+        {/* <Route path="/h" element={authUser ? <HomePage /> : <Navigate to="/login" />} /> */}
         <Route
           path="/"
           element={
@@ -105,6 +108,8 @@ const App = () => {
             authUser ? <SearchFriendPage /> : <Navigate to="/login" replace />
           }
         />
+        {/* Trang cài đặt - yêu cầu đăng nhập */}
+        <Route path="/settings" element={authUser ? <SettingsPage /> : <Navigate to="/login" />} />
         <Route
           path="/add-friend"
           element={authUser ? <AddFriendPage /> : <Navigate to="/login" replace />}

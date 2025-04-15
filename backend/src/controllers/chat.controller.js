@@ -3,67 +3,52 @@ const friendship = require("../models/friendship.model");
 const Message = require("../models/message.model");
 const { v4: uuidv4 } = require("uuid");
 const { emitNewMessage } = require("../services/socket.service");
+const cloudinary = require("cloudinary").v2;
 
 exports.sendMessage = async (req, res) => {
-  const senderId = req.user?._id;
-  const { chatId, content, receiverId } = req.body;
-
   try {
-    if (!senderId) {
-      return res.status(401).json({ message: "Không tìm thấy người dùng. Vui lòng đăng nhập lại." });
+    const senderId = req.user?._id;
+    const { chatId, content, image, video } = req.body;
+
+    if (!senderId) return res.status(401).json({ message: "Vui lòng đăng nhập lại." });
+    if ((!content || content.trim() === "") && !image && !video) {
+      return res.status(400).json({ message: "Tin nhắn không được để trống" });
     }
 
-    if (!content || content.trim() === "") {
-      return res.status(400).json({ message: "Nội dung tin nhắn không được để trống" });
+    let chat = await Chat.findOne({ chatId });
+    if (!chat) return res.status(404).json({ message: "Chat không tồn tại" });
+
+    let imageUrl, videoUrl;
+
+    if (image) {
+      const uploadRes = await cloudinary.uploader.upload(image);
+      imageUrl = uploadRes.secure_url;
     }
 
-    let targetChatId = chatId;
-    let chat;
-
-    if (!chatId) {
-      const friendShip = await friendship.findOne({
-        $or: [
-          { userId1: senderId, userId2: receiverId, status: "accepted" },
-          { userId2: senderId, userId1: receiverId, status: "accepted" },
-        ],
-      });
-
-      if (!friendShip) {
-        return res.status(403).json({ message: "Chỉ bạn bè mới có thể nhắn tin" });
-      }
-
-      chat = await Chat.findOneToOneChat(senderId, receiverId);
-      if (!chat) {
-        targetChatId = uuidv4();
-        chat = new Chat({
-          chatId: targetChatId,
-          participants: [senderId, receiverId],
-          isGroupChat: false,
-        });
-        await chat.save();
-      } else {
-        targetChatId = chat.chatId;
-      }
-    } else {
-      chat = await Chat.findOne({ chatId });
+    if (video) {
+      const uploadRes = await cloudinary.uploader.upload(video, { resource_type: "video" });
+      videoUrl = uploadRes.secure_url;
     }
+
+    const contentToSave = content && content.trim() !== "" ? content : (video ? "[Video]" : "");
 
     const messageId = uuidv4();
     const message = new Message({
       messageId,
-      chatId: targetChatId,
+      chatId,
       senderId,
-      content,
+      content: contentToSave,
+      image: imageUrl,
+      video: videoUrl,
     });
+
     await message.save();
 
-    // Cập nhật thời gian hoạt động
     chat.updatedAt = new Date();
     await chat.save();
 
     const io = req.app.get("io");
     const onlineUsers = req.app.get("onlineUsers");
-
     const populatedMessage = await Message.findOne({ messageId }).populate("senderId", "name avatar");
 
     emitNewMessage(chat, populatedMessage, io, onlineUsers);
@@ -74,6 +59,7 @@ exports.sendMessage = async (req, res) => {
     res.status(500).json({ message: "Lỗi server", error: error.message });
   }
 };
+
 
 exports.getMessages = async (req, res) => {
   const { chatId } = req.params;
@@ -143,7 +129,10 @@ exports.markAsRead = async (req, res) => {
       { chatId, senderId: { $ne: userId }, isRead: false },
       { isRead: true }
     );
-    res.json({ message: "Đã đánh dấu đã đọc", modifiedCount: updated.modifiedCount });
+    res.json({
+      message: "Đã đánh dấu đã đọc",
+      modifiedCount: updated.modifiedCount,
+    });
   } catch (err) {
     console.error("Lỗi đánh dấu đã đọc:", err);
     res.status(500).json({ message: "Lỗi server" });
@@ -154,30 +143,29 @@ exports.markAsRead = async (req, res) => {
 exports.testEmojiStorage = async (req, res) => {
   const { content } = req.body;
   const senderId = req.user._id;
-  
+
   try {
     // Tạo tin nhắn test với emoji
     const messageId = uuidv4();
     const testMessage = new Message({
       messageId,
-      chatId: 'test-emoji',
+      chatId: "test-emoji",
       senderId,
-      content
+      content,
     });
-    
+
     await testMessage.save();
-    
+
     // Truy xuất tin nhắn để kiểm tra
     const retrievedMessage = await Message.findOne({ messageId });
-    
+
     res.status(200).json({
       original: content,
       stored: retrievedMessage.content,
-      isMatched: content === retrievedMessage.content
+      isMatched: content === retrievedMessage.content,
     });
   } catch (error) {
-    console.error('Lỗi test emoji:', error);
-    res.status(500).json({ message: 'Lỗi server', error: error.message });
+    console.error("Lỗi test emoji:", error);
+    res.status(500).json({ message: "Lỗi server", error: error.message });
   }
 };
-
