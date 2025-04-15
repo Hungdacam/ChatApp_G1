@@ -2,7 +2,7 @@ const express = require('express');
 const authRoutes = require('./routes/auth.route');
 const messageRoutes = require('./routes/message.route');
 const friendRoutes = require('./routes/friends.route');
-const chatRoutes = require('./routes/chat.route')
+const chatRoutes = require('./routes/chat.route');
 const http = require('http');
 const socketio = require('socket.io');
 
@@ -39,8 +39,8 @@ const server = http.createServer(app);
 
 const io = socketio(server, {
     cors: {
-        origin:'http://localhost:5173',
-        method: ['GET', 'POST'],
+        origin: 'http://localhost:5173',
+        methods: ['GET', 'POST'],
         credentials: true,
     }
 });
@@ -50,37 +50,40 @@ console.log("Socket.IO initialized");
 const onlineUsers = new Map();
 io.on('connection', (socket) => {
     console.log("Có người đăng nhập mới: " + socket.id);
+
     socket.on("test-client", (data) => {
         console.log("📨 Nhận từ client test-client:", data);
         socket.emit("test-server", { message: "Server nhận được!", original: data });
     });
+
     socket.on("register", (userId) => {
         onlineUsers.set(userId, socket.id);
         console.log("📥 Nhận được register:", userId);
         console.log(`📌 Đã lưu user ${userId} với socket ${socket.id}`);
         console.log("🗺️ Danh sách onlineUsers:", [...onlineUsers.entries()]);
-      });
-      
+        // Emit sự kiện online_users cho tất cả client
+        io.emit("online_users", [...onlineUsers.entries()]);
+    });
+
     socket.on('disconnect', () => {
-       
         console.log('Người dùng đã ngắt kết nối: ' + socket.id);
         for (const [userId, sockId] of onlineUsers.entries()) {
             if (sockId === socket.id) {
-              onlineUsers.delete(userId);
-              console.log(`🗑️ Đã xoá user ${userId} khỏi onlineUsers`);
-              break;
+                onlineUsers.delete(userId);
+                console.log(`🗑️ Đã xoá user ${userId} khỏi onlineUsers`);
+                break;
             }
-          }
+        }
+        // Emit sự kiện online_users sau khi xóa người dùng
+        io.emit("online_users", [...onlineUsers.entries()]);
+        console.log("🗺️ Danh sách onlineUsers sau disconnect:", [...onlineUsers.entries()]);
     });
-    
 });
-app.set('io', io); 
+
+app.set('io', io);
 app.set('onlineUsers', onlineUsers);
 
-
-
-
-server.listen(PORT, '0.0.0.0',() => {
+server.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port: ${PORT}`);
     connectDB();
 });

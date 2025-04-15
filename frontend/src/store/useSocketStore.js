@@ -1,23 +1,28 @@
-// src/store/useSocketStore.js
+// useSocketStore.js
 import { io } from "socket.io-client";
 import { create } from "zustand";
-
+import { useChatStore } from "./useChatStore";
 export const useSocketStore = create((set) => ({
   socket: null,
+  onlineUsers: [], // Thêm trạng thái onlineUsers
 
   connectSocket: (token, userId) => {
+    console.log("Đang kết nối socket với token:", token ? "Có token" : "Không có token");
+    console.log("userId:", userId);
+    // Kiểm tra nếu socket đã kết nối thì bỏ qua
     if (useSocketStore.getState().socket?.connected) {
       console.log("Socket đã kết nối, bỏ qua kết nối mới");
       return;
     }
 
     const socket = io("http://localhost:3000", {
-      auth: { token },
+      withCredentials: true, // Gửi cookie trong kết nối socket
       transports: ["websocket"],
+      auth: { token, userId }, // Gửi token và userId trong auth
     });
 
     socket.on("connect", () => {
-      console.log("✅ Socket connected", socket.id);
+      console.log("✅ Socket connected:", socket.id);
       if (userId) {
         socket.emit("register", userId);
         console.log(`📤 Gửi register với userId: ${userId}`);
@@ -32,15 +37,47 @@ export const useSocketStore = create((set) => ({
 
     socket.on("disconnect", () => {
       console.log("Socket ngắt kết nối");
+      set({ onlineUsers: [] }); // Reset onlineUsers khi ngắt kết nối
     });
 
+    socket.on("new_message", (message) => {
+      console.log("Nhận tin nhắn mới từ socket:", message);
+      // Thêm tin nhắn mới vào state
+      useChatStore.getState().addMessage(message);
+    });
+    
+    socket.on("message_delivered", ({ messageId }) => {
+      console.log("Tin nhắn đã được gửi:", messageId);
+      // Cập nhật trạng thái đã gửi của tin nhắn nếu cần
+    });
+    
+    socket.on("message_read", ({ chatId, messageId }) => {
+      console.log("Tin nhắn đã được đọc:", messageId);
+      // Cập nhật trạng thái đã đọc của tin nhắn
+      const { messages } = useChatStore.getState();
+      const updatedMessages = messages.map(message => {
+        if (message.messageId === messageId) {
+          return { ...message, isRead: true };
+        }
+        return message;
+      });
+      
+      useChatStore.setState({ messages: updatedMessages });
+    });
     set({ socket });
   },
 
   disconnectSocket: () => {
     set((state) => {
-      state.socket?.disconnect();
-      return { socket: null };
+      if (state.socket) {
+        state.socket.disconnect();
+        console.log("Socket đã ngắt kết nối thủ công");
+      }
+      return { socket: null, onlineUsers: [] }; // Reset cả socket và onlineUsers
     });
+  },
+
+  setOnlineUsers: (users) => {
+    set({ onlineUsers: users });
   },
 }));

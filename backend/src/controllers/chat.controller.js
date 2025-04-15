@@ -94,9 +94,10 @@ exports.getMessages = async (req, res) => {
   }
 };
 
+// chat.controller.js
 exports.getChatList = async (req, res) => {
   const userId = req.user._id;
-
+  console.log("Đang lấy danh sách chat cho userId:", userId); // Thêm log
   try {
     const chats = await Chat.find({
       participants: userId,
@@ -105,6 +106,7 @@ exports.getChatList = async (req, res) => {
       .populate("participants", "name avatar")
       .sort({ updatedAt: -1 });
 
+    console.log("Danh sách chat tìm thấy:", chats); // Log dữ liệu tìm thấy
     const chatList = await Promise.all(
       chats.map(async (chat) => {
         const otherParticipant = chat.participants.find(
@@ -125,6 +127,7 @@ exports.getChatList = async (req, res) => {
       })
     );
 
+    console.log("Danh sách chat trả về:", chatList); // Log dữ liệu trả về
     res.json({ chats: chatList });
   } catch (error) {
     console.error("Lỗi lấy danh sách chat:", error);

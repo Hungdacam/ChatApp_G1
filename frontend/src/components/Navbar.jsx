@@ -2,7 +2,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import { LogOut, Search, Users } from "lucide-react";
 import useAuthStore from "../store/useAuthStore";
-import { useFriendStore } from "../store/useFriendStore";
+import {useFriendStore} from "../store/useFriendStore";
 import { useEffect } from "react";
 
 const Navbar = () => {

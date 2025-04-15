@@ -9,13 +9,7 @@ const chatSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now },
 });
 
-// Hàm tiện ích tìm chat 1-1
-chatSchema.statics.findOneToOneChat = async function(userId1, userId2) {
-  return this.findOne({
-    participants: { $all: [userId1, userId2] },
-    isGroupChat: false,
-  });
-};
+
 
 
 module.exports = mongoose.model('Chat', chatSchema);
