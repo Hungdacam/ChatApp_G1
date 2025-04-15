@@ -1,18 +1,27 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useChatStore } from "../store/useChatStore";
 import ChatHeader from "./ChatHeader";
 import MessageInput from "./MessageInput";
 import MessageSkeleton from "./skeletons/MessageSkeleton";
 import NoChatSelected from "./NoChatSelected";
+import MessageItem from "./MessageItem"; // Import component MessageItem
 
 const ChatContainer = () => {
-  const { 
-    messages, 
-    getMessages, 
-    isMessagesLoading, 
-    selectedChat 
+  const {
+    messages,
+    getMessages,
+    isMessagesLoading,
+    selectedChat
   } = useChatStore();
+  
   const messageEndRef = useRef(null);
+  const [currentUserId, setCurrentUserId] = useState(null);
+  
+  // Lấy userId từ localStorage khi component mount
+  useEffect(() => {
+    const userId = localStorage.getItem("userId");
+    setCurrentUserId(userId);
+  }, []);
 
   // Lấy tin nhắn khi selectedChat thay đổi
   useEffect(() => {
@@ -34,62 +43,38 @@ const ChatContainer = () => {
     return <NoChatSelected />;
   }
 
-  // Hiển thị khung skeleton khi đang tải tin nhắn
-  if (isMessagesLoading) {
-    return (
-      <div className="flex flex-col h-full">
-        <ChatHeader />
-        <div className="flex-1 overflow-y-auto p-4">
-          {[...Array(5)].map((_, index) => (
-            <MessageSkeleton key={index} />
-          ))}
-        </div>
-        <MessageInput />
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col h-full">
-      <ChatHeader />
+      <ChatHeader chat={selectedChat} />
+      
       <div className="flex-1 overflow-y-auto p-4">
-        {messages.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
-            <p className="text-gray-500">Chưa có tin nhắn nào</p>
+        {isMessagesLoading ? (
+          // Hiển thị skeleton loading khi đang tải tin nhắn
+          <div>
+            <MessageSkeleton />
+            <MessageSkeleton />
+            <MessageSkeleton />
+          </div>
+        ) : messages.length === 0 ? (
+          // Hiển thị khi không có tin nhắn
+          <div className="flex items-center justify-center h-full text-gray-500">
+            Chưa có tin nhắn nào. Hãy bắt đầu cuộc trò chuyện!
           </div>
         ) : (
-          messages.map((message) => {
-            const isCurrentUser = message.senderId._id === localStorage.getItem("userId");
-            return (
-              <div 
+          // Hiển thị danh sách tin nhắn
+          <div>
+            {messages.map((message) => (
+              <MessageItem 
                 key={message.messageId} 
-                className={`message ${isCurrentUser ? "sent" : "received"}`}
-              >
-                <div className="message-content">
-                <div className="message-content whitespace-pre-wrap break-words">{message.content}</div>
-                  
-                  {/* Hiển thị trạng thái tin nhắn */}
-                  {isCurrentUser && (
-                    <span className="message-status ml-1 text-xs text-gray-400">
-                      {message.isPending && <span title="Đang gửi">⏳</span>}
-                      {message.isError && <span title="Lỗi">❌</span>}
-                      {!message.isPending && !message.isError && !message.isRead && <span title="Đã gửi">✓</span>}
-                      {!message.isPending && !message.isError && message.isRead && <span title="Đã đọc">✓✓</span>}
-                    </span>
-                  )}
-                </div>
-                <div className="message-time text-xs text-gray-500">
-                  {new Date(message.createdAt).toLocaleTimeString([], { 
-                    hour: "2-digit", 
-                    minute: "2-digit" 
-                  })}
-                </div>
-              </div>
-            );
-          })
+                message={message} 
+                currentUserId={currentUserId} 
+              />
+            ))}
+            <div ref={messageEndRef} />
+          </div>
         )}
-        <div ref={messageEndRef} />
       </div>
+      
       <MessageInput />
     </div>
   );

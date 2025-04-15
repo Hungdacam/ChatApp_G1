@@ -3,67 +3,78 @@ const friendship = require("../models/friendship.model");
 const Message = require("../models/message.model");
 const { v4: uuidv4 } = require("uuid");
 const { emitNewMessage } = require("../services/socket.service");
+const s3 = require('../config/aws');
+const cloudinary = require('../config/cloudinary');
 
 exports.sendMessage = async (req, res) => {
-  const senderId = req.user?._id;
-  const { chatId, content, receiverId } = req.body;
-
   try {
-    if (!senderId) {
-      return res.status(401).json({ message: "Không tìm thấy người dùng. Vui lòng đăng nhập lại." });
+    const senderId = req.user?._id;
+    const { chatId, content, receiverId } = req.body;
+    let imageUrl = null;
+    let videoUrl = null;
+
+    console.log("Request body:", req.body);
+    console.log("Request files:", req.files);
+
+    if (!senderId) return res.status(401).json({ message: "Vui lòng đăng nhập lại." });
+    if (!chatId) return res.status(400).json({ message: "Thiếu chatId." });
+    if ((!content || content.trim() === "") && !req.files?.image && !req.files?.video) {
+      return res.status(400).json({ message: "Tin nhắn hoặc tệp không được để trống." });
     }
 
-    if (!content || content.trim() === "") {
-      return res.status(400).json({ message: "Nội dung tin nhắn không được để trống" });
-    }
+    let chat = await Chat.findOne({ chatId });
+    if (!chat) return res.status(404).json({ message: "Chat không tồn tại." });
 
-    let targetChatId = chatId;
-    let chat;
-
-    if (!chatId) {
-      const friendShip = await friendship.findOne({
-        $or: [
-          { userId1: senderId, userId2: receiverId, status: "accepted" },
-          { userId2: senderId, userId1: receiverId, status: "accepted" },
-        ],
-      });
-
-      if (!friendShip) {
-        return res.status(403).json({ message: "Chỉ bạn bè mới có thể nhắn tin" });
+    // Xử lý ảnh
+    if (req.files && req.files.image) {
+      try {
+        const uploadResponse = await cloudinary.uploader.upload(
+          `data:image/jpeg;base64,${req.files.image[0].buffer.toString('base64')}`,
+          { resource_type: 'image' }
+        );
+        imageUrl = uploadResponse.secure_url;
+        console.log("Image uploaded:", imageUrl);
+      } catch (uploadError) {
+        console.error("Lỗi tải ảnh:", uploadError);
+        return res.status(500).json({ message: "Lỗi tải ảnh lên Cloudinary." });
       }
-
-      chat = await Chat.findOneToOneChat(senderId, receiverId);
-      if (!chat) {
-        targetChatId = uuidv4();
-        chat = new Chat({
-          chatId: targetChatId,
-          participants: [senderId, receiverId],
-          isGroupChat: false,
-        });
-        await chat.save();
-      } else {
-        targetChatId = chat.chatId;
-      }
-    } else {
-      chat = await Chat.findOne({ chatId });
     }
+
+    // Xử lý video
+    if (req.files && req.files.video) {
+      try {
+        const uploadRes = await cloudinary.uploader.upload(
+          `data:video/mp4;base64,${req.files.video[0].buffer.toString('base64')}`,
+          { resource_type: 'video' }
+        );
+        videoUrl = uploadRes.secure_url;
+        console.log("Video uploaded:", videoUrl);
+      } catch (uploadError) {
+        console.error("Lỗi tải video:", uploadError);
+        return res.status(500).json({ message: "Lỗi tải video lên Cloudinary." });
+      }
+    }
+
+    const contentToSave = content && content.trim() !== "" ? content : (videoUrl ? "[Video]" : imageUrl ? "[Image]" : "");
 
     const messageId = uuidv4();
     const message = new Message({
       messageId,
-      chatId: targetChatId,
+      chatId,
       senderId,
-      content,
+      content: contentToSave,
+      image: imageUrl,
+      video: videoUrl,
     });
-    await message.save();
 
-    // Cập nhật thời gian hoạt động
+    await message.save();
+    console.log("Saved message:", message);
+
     chat.updatedAt = new Date();
     await chat.save();
 
     const io = req.app.get("io");
     const onlineUsers = req.app.get("onlineUsers");
-
     const populatedMessage = await Message.findOne({ messageId }).populate("senderId", "name avatar");
 
     emitNewMessage(chat, populatedMessage, io, onlineUsers);
@@ -94,10 +105,9 @@ exports.getMessages = async (req, res) => {
   }
 };
 
-// chat.controller.js
 exports.getChatList = async (req, res) => {
   const userId = req.user._id;
-  console.log("Đang lấy danh sách chat cho userId:", userId); // Thêm log
+
   try {
     const chats = await Chat.find({
       participants: userId,
@@ -106,7 +116,6 @@ exports.getChatList = async (req, res) => {
       .populate("participants", "name avatar")
       .sort({ updatedAt: -1 });
 
-    console.log("Danh sách chat tìm thấy:", chats); // Log dữ liệu tìm thấy
     const chatList = await Promise.all(
       chats.map(async (chat) => {
         const otherParticipant = chat.participants.find(
@@ -114,7 +123,13 @@ exports.getChatList = async (req, res) => {
         );
         const lastMessage = await Message.findOne({ chatId: chat.chatId })
           .sort({ createdAt: -1 })
-          .select("content createdAt");
+          .select("content createdAt isRead senderId");
+
+        const hasUnread =
+          lastMessage &&
+          lastMessage.senderId &&
+          lastMessage.senderId.toString() !== userId.toString() &&
+          !lastMessage.isRead;
 
         return {
           chatId: chat.chatId,
@@ -123,17 +138,17 @@ exports.getChatList = async (req, res) => {
           lastMessage: lastMessage ? lastMessage.content : "",
           currentUserId: userId,
           participants: chat.participants,
+          hasUnread: hasUnread || false,
         };
       })
     );
-
-    console.log("Danh sách chat trả về:", chatList); // Log dữ liệu trả về
     res.json({ chats: chatList });
   } catch (error) {
     console.error("Lỗi lấy danh sách chat:", error);
     res.status(500).json({ message: "Lỗi server" });
   }
 };
+
 exports.markAsRead = async (req, res) => {
   const { chatId } = req.body;
   const userId = req.user._id;
@@ -143,41 +158,135 @@ exports.markAsRead = async (req, res) => {
       { chatId, senderId: { $ne: userId }, isRead: false },
       { isRead: true }
     );
-    res.json({ message: "Đã đánh dấu đã đọc", modifiedCount: updated.modifiedCount });
+    res.json({
+      message: "Đã đánh dấu đã đọc",
+      modifiedCount: updated.modifiedCount,
+    });
   } catch (err) {
     console.error("Lỗi đánh dấu đã đọc:", err);
     res.status(500).json({ message: "Lỗi server" });
   }
 };
 
-// Thêm vào chat.controller.js
 exports.testEmojiStorage = async (req, res) => {
   const { content } = req.body;
   const senderId = req.user._id;
-  
+
   try {
-    // Tạo tin nhắn test với emoji
     const messageId = uuidv4();
     const testMessage = new Message({
       messageId,
-      chatId: 'test-emoji',
+      chatId: "test-emoji",
       senderId,
-      content
+      content,
     });
-    
+
     await testMessage.save();
-    
-    // Truy xuất tin nhắn để kiểm tra
     const retrievedMessage = await Message.findOne({ messageId });
-    
+
     res.status(200).json({
       original: content,
       stored: retrievedMessage.content,
-      isMatched: content === retrievedMessage.content
+      isMatched: content === retrievedMessage.content,
     });
   } catch (error) {
-    console.error('Lỗi test emoji:', error);
-    res.status(500).json({ message: 'Lỗi server', error: error.message });
+    console.error("Lỗi test emoji:", error);
+    res.status(500).json({ message: "Lỗi server", error: error.message });
   }
 };
 
+exports.recallMessage = async (req, res) => {
+  const { messageId } = req.body;
+  const userId = req.user?._id;
+
+  try {
+    if (!userId) {
+      return res.status(401).json({ message: "Không tìm thấy người dùng. Vui lòng đăng nhập lại." });
+    }
+
+    const message = await Message.findOne({ messageId });
+    if (!message) {
+      return res.status(404).json({ message: "Không tìm thấy tin nhắn." });
+    }
+
+    if (message.senderId.toString() !== userId.toString()) {
+      return res.status(403).json({ message: "Bạn không có quyền thu hồi tin nhắn này." });
+    }
+
+    if (message.isRecalled) {
+      return res.status(400).json({ message: "Tin nhắn đã được thu hồi trước đó." });
+    }
+
+    message.isRecalled = true;
+    message.content = "Tin nhắn đã được thu hồi";
+    if (message.fileUrl) {
+      message.fileUrl = null; // Xóa fileUrl khi thu hồi
+      message.fileName = null; // Xóa fileName khi thu hồi
+    }
+    await message.save();
+
+    const io = req.app.get("io");
+    const onlineUsers = req.app.get("onlineUsers");
+    const chat = await Chat.findOne({ chatId: message.chatId });
+
+    emitNewMessage(chat, message, io, onlineUsers);
+
+    res.status(200).json({ message: "Tin nhắn đã được thu hồi", messageId });
+  } catch (error) {
+    console.error("Lỗi thu hồi tin nhắn:", error);
+    res.status(500).json({ message: "Lỗi server", error: error.message });
+  }
+};
+
+exports.sendFile = async (req, res) => {
+  try {
+    const { chatId, receiverId } = req.body;
+
+    console.log("Request body:", req.body); // Debug
+    console.log("Request file:", req.file); // Debug
+
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ message: "Không tìm thấy người dùng. Vui lòng đăng nhập lại." });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: "Vui lòng gửi một tệp." });
+    }
+
+    const fileId = uuidv4();
+    const fileName = req.file.originalname;
+    const fileKey = `chat-files/${fileId}-${fileName}`;
+
+    const params = {
+      Bucket: "app-chat-cnm",
+      Key: fileKey,
+      Body: req.file.buffer,
+      ContentType: req.file.mimetype,
+    };
+
+    const uploadResult = await s3.upload(params).promise();
+    console.log("File uploaded to S3:", uploadResult.Location); // Debug
+
+    const newMessage = new Message({
+      messageId: uuidv4(),
+      chatId,
+      senderId: req.user._id,
+      content: fileName,
+      fileUrl: uploadResult.Location,
+      fileName,
+      isDelivered: false,
+      isRead: false,
+      createdAt: new Date(),
+    });
+
+    await newMessage.save();
+    console.log("Saved message:", newMessage); // Debug
+
+    req.app.get("io").to(chatId).emit("new_message", { message: newMessage });
+
+    res.status(200).json(newMessage);
+  } catch (error) {
+    console.error("Lỗi gửi tệp:", error);
+    res.status(500).json({ message: "Không thể gửi tệp." });
+  }
+};

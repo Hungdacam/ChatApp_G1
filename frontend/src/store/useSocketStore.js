@@ -41,9 +41,13 @@ export const useSocketStore = create((set) => ({
     });
 
     socket.on("new_message", (data) => {
-      console.log("Nhận tin nhắn mới từ socket:", data);
-      // Thêm tin nhắn mới vào state
-      useChatStore.getState().addMessage(data.message);
+      const updatedMessage = {
+        ...data.message,
+        image: data.message.imageUrl, // Chuyển từ URL tạm sang URL thật
+        video: data.message.videoUrl,
+        fileUrl: data.message.fileUrl
+      };
+      useChatStore.getState().addMessage(updatedMessage);
       
       // Cập nhật lại danh sách chat nếu cần
       const { chats, fetchChatList } = useChatStore.getState();

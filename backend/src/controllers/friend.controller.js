@@ -2,6 +2,7 @@ const Friendship = require('../models/friendship.model');
 const User = require('../models/user.model');
 const Chat = require('../models/chat.model');
 const { v4: uuidv4 } = require('uuid');
+
 exports.sendFriendRequest = async (req, res) => {
   const senderId = req.user._id;
   const { receiverId } = req.body;
@@ -190,7 +191,6 @@ exports.canSendMessage = async (req, res) => {
     res.status(500).json({ message: 'Lỗi server' });
   }
 };
-
 exports.rejectFriendRequest = async (req, res) => {
   const receiverId = req.user._id; // Người nhận lời mời (User B)
   const { senderId } = req.body; // Người gửi lời mời (User A)

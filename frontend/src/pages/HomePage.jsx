@@ -22,12 +22,20 @@ const HomePage = ({ isSocketReady }) => {
   }
   
   return (
-    <div className="flex h-screen">
-      <div className="w-1/3 border-r">
-        <Sidebar />
-      </div>
-      <div className="w-2/3">
-        {selectedChat ? <ChatContainer /> : <NoChatSelected />}
+    <div className="h-screen bg-base-200">
+      <div className="flex items-center justify-center pt-20 px-4">
+        <div className="bg-base-100 rounded-lg shadow-cl w-full max-w-6xl h-[calc(100vh-8rem)]">
+          <div className="flex h-full rounded-lg overflow-hidden">
+            {/* Sidebar chiếm 1/3 hoặc w-72 */}
+            <div className="w-72 border-r border-base-300 h-full">
+              <Sidebar />
+            </div>
+            {/* ChatContainer chiếm phần còn lại */}
+            <div className="flex-1 h-full">
+              {selectedChat ? <ChatContainer /> : <NoChatSelected />}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
