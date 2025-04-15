@@ -40,11 +40,18 @@ export const useSocketStore = create((set) => ({
       set({ onlineUsers: [] }); // Reset onlineUsers khi ngắt kết nối
     });
 
-    socket.on("new_message", (message) => {
-      console.log("Nhận tin nhắn mới từ socket:", message);
+    socket.on("new_message", (data) => {
+      console.log("Nhận tin nhắn mới từ socket:", data);
       // Thêm tin nhắn mới vào state
-      useChatStore.getState().addMessage(message);
+      useChatStore.getState().addMessage(data.message);
+      
+      // Cập nhật lại danh sách chat nếu cần
+      const { chats, fetchChatList } = useChatStore.getState();
+      if (chats.length === 0) {
+        fetchChatList();
+      }
     });
+    
     
     socket.on("message_delivered", ({ messageId }) => {
       console.log("Tin nhắn đã được gửi:", messageId);
