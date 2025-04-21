@@ -3,6 +3,7 @@ import { create } from "zustand";
 import axios from "../lib/axios";
 import { useSocketStore } from "./useSocketStore";
 import { toast } from "react-hot-toast";
+import { useChatStore } from "./useChatStore";
 
 export const useFriendStore = create((set, get) => {
   const setupSocketListeners = () => {
@@ -23,7 +24,16 @@ export const useFriendStore = create((set, get) => {
           console.error("Dữ liệu lời mời không hợp lệ:", request);
         }
       });
-
+      // Thêm listener cho sự kiện friend_request_accepted
+      socket.off("friend_request_accepted");
+      socket.on("friend_request_accepted", ({ receiver, chatId }) => {
+        if (receiver?.name) {
+          toast.success(`🎉 ${receiver.name} đã chấp nhận lời mời kết bạn của bạn`);
+          get().fetchFriends(); // Cập nhật danh sách bạn bè
+          get().fetchSentRequests(); // Cập nhật danh sách lời mời đã gửi
+          useChatStore.getState().refreshChatList();
+        }
+      });
       // Thêm listener cho sự kiện friend_request_rejected (nếu User A nhận thông báo từ chối)
       socket.off("friend_request_rejected");
       socket.on("friend_request_rejected", ({ receiver }) => {
@@ -98,6 +108,7 @@ export const useFriendStore = create((set, get) => {
         const res = await axios.post("/friends/accept-request", { senderId }, { withCredentials: true });
         toast.success("Đã chấp nhận lời mời kết bạn");
         get().fetchReceivedRequests();
+        useChatStore.getState().refreshChatList();
         return res.data.chatId;
       } catch (err) {
         console.error("❌ Error accepting friend request:", err);
@@ -116,6 +127,37 @@ export const useFriendStore = create((set, get) => {
         toast.error("Không thể từ chối lời mời");
       }
     },
+    fetchFriends: async () => {
+      try {
+        const res = await axios.get("/friends/list", { withCredentials: true });
+        set({ friends: res.data });
+        console.log("Danh sách bạn bè:", res.data);
+      } catch (err) {
+        console.error("❌ Error fetching friends:", err);
+        toast.error("Không thể tải danh sách bạn bè");
+      }
+    },
+    
+    checkFriendshipStatus: (targetId) => {
+      const { friends, sentRequests, receivedRequests } = get();
+      
+      // Kiểm tra xem đã là bạn bè chưa
+      if (friends.some(friend => friend._id === targetId)) {
+        return 'accepted';
+      }
+      
+      // Kiểm tra xem đã gửi lời mời chưa
+      if (sentRequests.some(req => req.userId2._id === targetId)) {
+        return 'pending';
+      }
+      
+      // Kiểm tra xem đã nhận lời mời chưa
+      if (receivedRequests.some(req => req.userId1._id === targetId)) {
+        return 'received';
+      }
+      
+      return 'none';
+    } ,
     setupSocketListeners,
   };
 });

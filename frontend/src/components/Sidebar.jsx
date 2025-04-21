@@ -10,13 +10,15 @@ const Sidebar = () => {
   const { chats, isChatsLoading, selectChat, selectedChat, error, fetchChatList } = useChatStore();
   const { onlineUsers } = useSocketStore();
   const [showOnlineOnly, setShowOnlineOnly] = useState(false);
-
+  const [hasAttemptedFetch, setHasAttemptedFetch] = useState(false);
   // Fetch chat list nếu cần
   useEffect(() => {
-    if (chats.length === 0 && !isChatsLoading) {
+    if (chats.length === 0 && !isChatsLoading && !hasAttemptedFetch) {
+      console.log("Sidebar: Không có chats, gọi fetchChatList lần đầu");
       fetchChatList();
+      setHasAttemptedFetch(true);
     }
-  }, [fetchChatList, chats.length, isChatsLoading]);
+  }, [fetchChatList, chats.length, isChatsLoading, hasAttemptedFetch]);
 
   useEffect(() => {
     console.log("Trạng thái chats trong Sidebar:", chats);

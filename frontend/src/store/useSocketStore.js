@@ -43,15 +43,52 @@ export const useSocketStore = create((set) => ({
     socket.on("new_message", (data) => {
       const updatedMessage = {
         ...data.message,
-        image: data.message.imageUrl, // Chuyển từ URL tạm sang URL thật
-        video: data.message.videoUrl,
+        image: data.message.image || data.message.imageUrl, // Hỗ trợ cả image và imageUrl
+        video: data.message.video || data.message.videoUrl, // Hỗ trợ cả video và videoUrl
         fileUrl: data.message.fileUrl
       };
       useChatStore.getState().addMessage(updatedMessage);
+      const { messages } = useChatStore.getState();
+      const userId = localStorage.getItem("userId");
+      // Kiểm tra xem tin nhắn này có phải do chính người dùng hiện tại gửi không
+      const isSentByCurrentUser = updatedMessage.senderId._id === userId;
+      // Kiểm tra xem tin nhắn này đã được xử lý chưa
+      const existingMessage = messages.find(msg => 
+        (msg.messageId === updatedMessage.messageId) ||
+        (msg._processed && msg.content === updatedMessage.content &&
+        msg.senderId && updatedMessage.senderId &&
+        msg.senderId._id === updatedMessage.senderId._id)
+      );
       
+      if (existingMessage) {
+        // Tin nhắn đã tồn tại, không thêm nữa
+        return;
+      }
+  
+      // Nếu tin nhắn do người dùng hiện tại gửi, kiểm tra xem đã có tin nhắn tạm thời tương ứng chưa
+      if (isSentByCurrentUser) {
+        const tempMessage = messages.find(msg =>
+          msg.isPending &&
+          msg.content === updatedMessage.content &&
+          msg.senderId && updatedMessage.senderId &&
+          msg.senderId._id === updatedMessage.senderId._id &&
+          Math.abs(new Date(msg.createdAt) - new Date(updatedMessage.createdAt)) < 10000
+        );
+        
+        if (tempMessage) {
+          // Xóa tin nhắn tạm thời và thêm tin nhắn mới từ server
+          const updatedMessages = messages.filter(msg => msg !== tempMessage);
+          useChatStore.setState({ messages: [...updatedMessages, data.message] });
+          return;
+        }
+      }
+      // Nếu không có tin nhắn tạm thời hoặc tin nhắn không do người dùng hiện tại gửi, thêm vào
+      useChatStore.getState().addMessage(updatedMessage);
+
+
       // Cập nhật lại danh sách chat nếu cần
-      const { chats, fetchChatList } = useChatStore.getState();
-      if (chats.length === 0) {
+      const { chats, fetchChatList, hasAttemptedInitialFetch } = useChatStore.getState();
+      if (chats.length === 0 && !hasAttemptedInitialFetch) {
         fetchChatList();
       }
     });
@@ -62,7 +99,7 @@ export const useSocketStore = create((set) => ({
       // Cập nhật trạng thái đã gửi của tin nhắn nếu cần
     });
     
-    socket.on("message_read", ({ chatId, messageId }) => {
+    socket.on("message_read", ({messageId }) => {
       console.log("Tin nhắn đã được đọc:", messageId);
       // Cập nhật trạng thái đã đọc của tin nhắn
       const { messages } = useChatStore.getState();
@@ -91,4 +128,6 @@ export const useSocketStore = create((set) => ({
   setOnlineUsers: (users) => {
     set({ onlineUsers: users });
   },
+  
+  
 }));

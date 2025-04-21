@@ -9,31 +9,49 @@ const AddFriendPage = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { authUser } = useAuthStore();
-  const { sendFriendRequest, cancelFriendRequest, fetchSentRequests, sentRequests } = useFriendStore();
-
+  const { 
+    sendFriendRequest, 
+    cancelFriendRequest, 
+    fetchSentRequests, 
+    fetchFriends,
+    sentRequests,
+    friends,
+    checkFriendshipStatus
+  } = useFriendStore();
+  
   const friend = location.state?.friend;
-  const [alreadySent, setAlreadySent] = useState(false);
-  const [isFriend, setIsFriend] = useState(false);
+  const [friendshipStatus, setFriendshipStatus] = useState('none'); // 'none', 'pending', 'friend'
   const [isLoading, setIsLoading] = useState(false);
   const [selectedImg, setSelectedImg] = useState(friend?.avatar);
 
   useEffect(() => {
+    // Tải cả danh sách bạn bè và lời mời đã gửi
     fetchSentRequests();
+    fetchFriends();
   }, []);
 
   useEffect(() => {
-    setAlreadySent(sentRequests.some((req) => req.userId2?._id === friend?._id));
-  }, [sentRequests, friend]);
+    if (friend?._id) {
+      const status = checkFriendshipStatus(friend._id);
+      setFriendshipStatus(status);
+    }
+  }, [sentRequests, friends, friend]);
 
   const handleAddOrCancel = async () => {
     setIsLoading(true);
     try {
-      if (alreadySent) {
+      if (friendshipStatus === 'pending') {
         const success = await cancelFriendRequest(friend._id);
-        if (success) toast.success("Đã hủy lời mời kết bạn");
-      } else {
+        if (success) {
+          toast.success("Đã hủy lời mời kết bạn");
+          setFriendshipStatus('none');
+        }
+      } else if (friendshipStatus === 'none') {
         const success = await sendFriendRequest(friend._id);
-        if (success) toast.success("Đã gửi lời mời kết bạn");
+        if (success) {
+          toast.success("Đã gửi lời mời kết bạn");
+          setFriendshipStatus('pending');
+        }
       }
     } catch (err) {
       toast.error("Lỗi khi xử lý lời mời kết bạn");
@@ -46,74 +64,87 @@ const AddFriendPage = () => {
     navigate("/chat", { state: { friend } });
   };
 
+  // Render button dựa vào trạng thái friendship
+  const renderActionButton = () => {
+    if (friendshipStatus === 'friend') {
+      return (
+        <div className="flex gap-3">
+          <button 
+            className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium"
+            disabled
+          >
+            Đã kết bạn
+          </button>
+          <button 
+            onClick={handleStartChat}
+            className="bg-blue-500 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2"
+          >
+            <MessageCircle size={18} /> Nhắn tin
+          </button>
+        </div>
+      );
+    } else if (friendshipStatus === 'pending') {
+      return (
+        <button 
+          onClick={handleAddOrCancel}
+          disabled={isLoading}
+          className="bg-yellow-500 text-white px-4 py-2 rounded-lg font-medium"
+        >
+          {isLoading ? "Đang xử lý..." : "Hủy lời mời"}
+        </button>
+      );
+    } else {
+      return (
+        <button 
+          onClick={handleAddOrCancel}
+          disabled={isLoading}
+          className="bg-blue-500 text-white px-4 py-2 rounded-lg font-medium"
+        >
+          {isLoading ? "Đang xử lý..." : "Kết bạn"}
+        </button>
+      );
+    }
+  };
+
   return (
-    <div className="profile-page h-screen overflow-y-auto">
-      <div className="max-w-2xl mx-auto p-4 py-8">
-        <div className="bg-base-300 rounded-xl p-6 space-y-8">
-          <div className="text-center">
-            <h1 className="text-2xl font-semibold">Thông tin người dùng</h1>
-            <p className="mt-2 text-zinc-500">Chi tiết người bạn muốn kết bạn</p>
+    <div className="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden md:max-w-2xl m-4">
+      <div className="p-8">
+        <div className="text-center mb-6">
+          <h2 className="text-2xl font-bold text-gray-800">Chi tiết người dùng</h2>
+        </div>
+        
+        <div className="flex flex-col items-center mb-6">
+          <img 
+            src={selectedImg || "/default-avatar.png"} 
+            alt="Avatar" 
+            className="w-32 h-32 rounded-full object-cover border-4 border-blue-500"
+          />
+          <h3 className="mt-4 text-xl font-semibold">{friend?.name}</h3>
+        </div>
+        
+        <div className="space-y-4 mb-6">
+          <div className="flex items-center gap-3">
+            <Phone className="text-blue-500" />
+            <span>{friend?.phone || "Chưa cập nhật"}</span>
           </div>
-
-          <div className="flex flex-col items-center gap-4">
-            <div className="relative">
-              <img
-                src={selectedImg || "/avatar.png"}
-                alt="Profile"
-                className="size-32 rounded-full object-cover border-4"
-              />
+          <div className="flex items-center gap-3">
+            <User size={20} className="text-primary" />
+            <span>{friend?.gender || "Không xác định"}</span>
+          </div>
+          {friend?.dob && (
+            <div className="flex items-center gap-3">
+              <Calendar size={20} className="text-primary" />
+              <span>{new Date(friend.dob).toLocaleDateString('vi-VN')}</span>
             </div>
-            <p className="text-sm text-zinc-400">Ảnh đại diện</p>
-          </div>
-
-          <div className="space-y-4">
-            <InfoRow icon={<User className="w-4 h-4" />} label="Full Name" value={friend.name} />
-            <InfoRow icon={<Phone className="w-4 h-4" />} label="Phone" value={friend.phone} />
-            <InfoRow icon={<Calendar className="w-4 h-4" />} label="Date of Birth" value={friend.dob ? new Date(friend.dob).toLocaleDateString() : "—"} />
-            <InfoRow icon={<Heart className="w-4 h-4" />} label="Gender" value={friend.gender || "—"} />
-          </div>
-
-          <div className="space-y-2">
-            <button
-              disabled={isLoading || isFriend || !friend._id}
-              onClick={handleAddOrCancel}
-              className={`w-full py-2.5 rounded-lg text-white transition-colors ${
-                isFriend
-                  ? "bg-gray-500 cursor-not-allowed"
-                  : alreadySent
-                  ? "bg-red-500 hover:bg-red-600"
-                  : "bg-primary hover:bg-primary-dark"
-              }`}
-            >
-              {isFriend ? "Đã là bạn" : alreadySent ? "Hủy lời mời" : "Gửi lời mời kết bạn"}
-            </button>
-
-            {isFriend && (
-              <button
-                onClick={handleStartChat}
-                className="w-full py-2.5 rounded-lg text-white bg-blue-500 hover:bg-blue-600 transition-colors"
-              >
-                <MessageCircle className="w-4 h-4 inline mr-2" />
-                Nhắn tin
-              </button>
-            )}
-          </div>
+          )}
+        </div>
+        
+        <div className="flex justify-center">
+          {renderActionButton()}
         </div>
       </div>
     </div>
   );
 };
-
-const InfoRow = ({ icon, label, value }) => (
-  <div className="space-y-1.5">
-    <div className="text-sm text-zinc-400 flex items-center gap-2">
-      {icon}
-      {label}
-    </div>
-    <div className="w-full px-4 py-2.5 bg-base-200 rounded-lg border text-zinc-800">
-      {value || "—"}
-    </div>
-  </div>
-);
 
 export default AddFriendPage;

@@ -6,16 +6,16 @@ import { useChatStore } from "../store/useChatStore";
 import { useEffect } from "react";
 
 const HomePage = ({ isSocketReady }) => {
-  const { selectedChat, fetchChatList } = useChatStore(); // Sử dụng selectedChat thay vì selectedChatId
+  const { selectedChat, fetchChatList , hasAttemptedFetch, setHasAttemptedFetch} = useChatStore(); // Sử dụng selectedChat thay vì selectedChatId
   
   useEffect(() => {
-    if (isSocketReady) {
+    if (isSocketReady && !hasAttemptedFetch) {
       console.log("Socket đã sẵn sàng, gọi fetchChatList");
       fetchChatList();
-    } else {
-      console.log("Socket chưa sẵn sàng, chờ kết nối");
+      setHasAttemptedFetch(true);
     }
-  }, [fetchChatList, isSocketReady]);
+  }, [isSocketReady, fetchChatList, hasAttemptedFetch]);
+  
   
   if (!isSocketReady) {
     return <div>Đang kết nối...</div>;

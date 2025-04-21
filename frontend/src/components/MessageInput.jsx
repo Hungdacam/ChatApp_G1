@@ -91,7 +91,6 @@ const MessageInput = () => {
     reader.readAsDataURL(file);
   };
   
-  // Xử lý khi chọn file - Đã sửa để gửi ngay lập tức
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (!file || !selectedChat) return;
@@ -120,7 +119,6 @@ const MessageInput = () => {
       // Reset form sau khi gửi thành công
       setFileInfo(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
-      
       toast.success("Đã gửi file thành công");
     } catch (error) {
       console.error("Lỗi khi gửi file:", error);
@@ -147,13 +145,16 @@ const MessageInput = () => {
     
     setIsSending(true);
     try {
-      // Chỉ gửi tin nhắn văn bản, ảnh hoặc video
-      await sendMessage({
+      // Chuẩn bị dữ liệu
+      const messageData = {
         chatId: selectedChat.chatId,
         content: text,
         image: imagePreview ? imageInputRef.current.files[0] : null,
         video: videoPreview ? videoInputRef.current.files[0] : null
-      });
+      };
+      
+      // Gửi tin nhắn
+      await sendMessage(messageData);
       
       // Reset form
       setText("");
@@ -161,6 +162,7 @@ const MessageInput = () => {
       setVideoPreview(null);
       if (imageInputRef.current) imageInputRef.current.value = "";
       if (videoInputRef.current) videoInputRef.current.value = "";
+      setShowEmojiPicker(false);
     } catch (error) {
       console.error("Lỗi khi gửi tin nhắn:", error);
       toast.error("Không thể gửi tin nhắn. Vui lòng thử lại sau.");
