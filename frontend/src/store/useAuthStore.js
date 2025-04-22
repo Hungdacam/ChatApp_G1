@@ -91,6 +91,9 @@ const useAuthStore = create((set) => ({
       // Lưu token và cập nhật authUser
       if (res.data.token) {
         localStorage.setItem("authToken", res.data.token);
+        localStorage.setItem("userId", res.data.user._id);
+        localStorage.setItem("userName", res.data.user.name || "");
+        localStorage.setItem("userAvatar", res.data.user.avatar || "");
       } else {
         console.warn("Backend không trả về token!");
       }

@@ -1,16 +1,20 @@
 // Sidebar.jsx
 import { useEffect, useState } from "react";
-import { Users } from "lucide-react";
+import { Users, UserPlus } from "lucide-react";
 import SidebarSkeleton from "./skeletons/SidebarSkeleton";
 import { useChatStore } from "../store/useChatStore";
 import { useSocketStore } from "../store/useSocketStore";
 import toast from "react-hot-toast";
+import CreateGroupModal from "./CreateGroupModal";
 
 const Sidebar = () => {
   const { chats, isChatsLoading, selectChat, selectedChat, error, fetchChatList } = useChatStore();
   const { onlineUsers } = useSocketStore();
+
   const [showOnlineOnly, setShowOnlineOnly] = useState(false);
   const [hasAttemptedFetch, setHasAttemptedFetch] = useState(false);
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
+  
   // Fetch chat list nếu cần
   useEffect(() => {
     if (chats.length === 0 && !isChatsLoading && !hasAttemptedFetch) {
@@ -36,6 +40,7 @@ const Sidebar = () => {
 
   const filteredChats = showOnlineOnly
     ? safeChats.filter((chat) => {
+      if (!chat || chat.isGroupChat === undefined || chat.isGroupChat) return false;
         const otherParticipant = chat.participants?.find(
           (p) => p._id?.toString() !== chat.currentUserId?.toString()
         );
@@ -46,6 +51,7 @@ const Sidebar = () => {
   console.log("filteredChats:", filteredChats);
 
   const onlineChatsCount = safeChats.filter((chat) => {
+    if (!chat || chat.isGroupChat) return false; 
     const otherParticipant = chat.participants?.find(
       (p) => p._id?.toString() !== chat.currentUserId?.toString()
     );
@@ -57,6 +63,34 @@ const Sidebar = () => {
     selectChat(chat); // Truyền toàn bộ đối tượng chat
   };
 
+  // Hàm để lấy tên và avatar cho chat (xử lý cả chat đơn và chat nhóm)
+  const getChatDisplayInfo = (chat) => {
+    if (!chat) {
+      return {
+        name: "Không có dữ liệu",
+        avatar: "/avatar.png",
+        isOnline: false
+      };
+    }
+    if (chat.isGroupChat) {
+      return {
+        name: chat.name || "Nhóm chat",
+        avatar: chat.avatar || "/group-avatar.png",
+        isOnline: false // Nhóm không có trạng thái online
+      };
+    } else {
+      const otherParticipant = chat.participants?.find(
+        (p) => p._id?.toString() !== chat.currentUserId?.toString()
+      );
+      
+      return {
+        name: otherParticipant?.name || "Người dùng",
+        avatar: otherParticipant?.avatar || "/avatar.png",
+        isOnline: otherParticipant && safeOnlineUsers.includes(otherParticipant._id)
+      };
+    }
+  };
+
   if (isChatsLoading) return <SidebarSkeleton />;
 
   return (
@@ -65,6 +99,13 @@ const Sidebar = () => {
         <div className="flex items-center gap-2">
           <Users className="size-6" />
           <span className="font-medium hidden lg:block">Chats</span>
+          <button
+            onClick={() => setShowCreateGroup(true)}
+            className="p-2 bg-blue-500 text-white rounded-full hover:bg-blue-600 ml-auto"
+            title="Tạo nhóm mới"
+          >
+            <UserPlus size={20} />
+          </button>
         </div>
         <div className="mt-3 hidden lg:flex items-center gap-2">
           <label className="cursor-pointer flex items-center gap-2">
@@ -81,16 +122,16 @@ const Sidebar = () => {
       </div>
 
       <div className="overflow-y-auto w-full py-3">
-        {filteredChats.length > 0 ? (
-          filteredChats.map((chat) => {
+      {filteredChats.length > 0 ? (
+        filteredChats
+          .filter(chat => chat !== undefined && chat !== null)
+          .map((chat) => {
             console.log("Đang render chat:", chat);
-            const otherParticipant = chat.participants?.find(
-              (p) => p._id?.toString() !== chat.currentUserId?.toString()
-            );
+            const { name, avatar, isOnline } = getChatDisplayInfo(chat);
 
             return (
               <button
-                key={chat.chatId}
+                key={chat.chatId || `temp-${Math.random()}`}
                 onClick={() => handleSelectChat(chat)}
                 className={`
                   w-full p-3 flex items-center gap-3
@@ -104,38 +145,55 @@ const Sidebar = () => {
               >
                 <div className="relative mx-auto lg:mx-0">
                   <img
-                    src={chat.avatar || "/avatar.png"}
-                    alt={chat.name}
+                    src={avatar}
+                    alt={name}
                     className="size-12 object-cover rounded-full"
                   />
-                  {otherParticipant && safeOnlineUsers.includes(otherParticipant._id) && (
+                  {isOnline && (
                     <span
                       className="absolute bottom-0 right-0 size-3 bg-green-500 
                       rounded-full ring-2 ring-zinc-900"
                     />
                   )}
+                  {chat.isGroupChat && (
+                    <span
+                      className="absolute bottom-0 right-0 size-4 bg-blue-500 
+                      rounded-full ring-2 ring-zinc-900 flex items-center justify-center"
+                    >
+                      <Users size={10} className="text-white" />
+                    </span>
+                  )}
                 </div>
 
                 <div className="hidden lg:block text-left min-w-0">
-                  <div className="font-medium truncate">{chat.name}</div>
+                  <div className="font-medium truncate">
+                    {name}
+                    {chat.isGroupChat && <span className="text-xs text-zinc-500 ml-1">
+                      ({chat.participants?.length || 0})
+                    </span>}
+                  </div>
                   <div className="text-sm text-zinc-400 truncate">
                     {chat.lastMessage ? chat.lastMessage : "No messages yet"}
                   </div>
                   <div className="text-xs text-zinc-500">
-                    {otherParticipant && safeOnlineUsers.includes(otherParticipant._id)
-                      ? "Online"
-                      : "Offline"}
+                    {chat.isGroupChat 
+                      ? `${chat.participants?.length || 0} thành viên` 
+                      : (isOnline ? "Online" : "Offline")}
                   </div>
                 </div>
               </button>
-            );
+            ) ;
           })
-        ) : (
+        ).filter(Boolean) : (
           <div className="text-center text-zinc-500 py-4">
             {showOnlineOnly ? "No online chats" : "No chats found"}
           </div>
         )}
       </div>
+      
+      {showCreateGroup && (
+        <CreateGroupModal onClose={() => setShowCreateGroup(false)} />
+      )}
     </aside>
   );
 };

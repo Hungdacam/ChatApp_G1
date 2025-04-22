@@ -1,11 +1,28 @@
-// MessageItem.jsx
-import React, { memo } from 'react';
+
+import React, { memo }from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { Paperclip } from 'lucide-react';
+import { useMemo } from 'react';
 
-const MessageItem = memo(({ message, currentUserId }) => {
-  const isSentByMe = message.senderId && message.senderId._id === currentUserId;
+const MessageItem = memo(({ message, currentUserId, isGroupChat  }) => {
+  const isSentByMe = useMemo(() => {
+    if (!message.senderId || !currentUserId) return false;
+    console.log(message.senderId);
+    console.log(currentUserId);
+    // Trường hợp senderId là một đối tượng có thuộc tính _id
+    if (typeof message.senderId === 'object' && message.senderId._id) {
+      return message.senderId._id === currentUserId;
+    }
+    
+    // Trường hợp senderId là một chuỗi ID
+    if (typeof message.senderId === 'string') {
+      return message.senderId === currentUserId;
+    }
+    
+    return false;
+  }, [message.senderId, currentUserId]);
+  
   const formattedTime = message.createdAt 
     ? formatDistanceToNow(new Date(message.createdAt), { addSuffix: true, locale: vi }) 
     : '';
@@ -85,20 +102,27 @@ const MessageItem = memo(({ message, currentUserId }) => {
 
   return (
     <div className={`flex mb-4 ${isSentByMe ? 'justify-end' : 'justify-start'}`}>
-      {!isSentByMe && message.senderId && (
-        <div className="mr-2">
-          <img 
-            src={message.senderId.avatar || "https://via.placeholder.com/40"} 
-            alt={message.senderId.name || "User"} 
-            className="w-10 h-10 rounded-full"
-          />
-        </div>
+      {!isSentByMe && (
+        <img
+        src={typeof message.senderId === 'object' ? message.senderId.avatar || '/default-avatar.png' : '/default-avatar.png'}
+        alt={typeof message.senderId === 'object' ? message.senderId.name || "User" : "User"}
+        className="w-8 h-8 rounded-full mr-2 self-end"
+      />
       )}
 
-      <div className={`max-w-[70%] ${isSentByMe ? 'bg-blue-500 text-white' : 'bg-gray-200'} rounded-lg p-3`}>
-        {!isSentByMe && message.senderId && (
-          <p className="text-xs font-medium mb-1">{message.senderId.name || "User"}</p>
-        )}
+      <div
+              className={`max-w-xs rounded-lg p-3 ${
+                isSentByMe
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-gray-100 text-gray-800'
+              }`}
+            >
+              {/* Chỉ hiển thị tên người gửi trong chat nhóm và không phải tin nhắn của mình */}
+              {!isSentByMe && isGroupChat && (
+                <div className="text-xs font-medium mb-1 text-gray-600">
+                  {typeof message.senderId === 'object' ? message.senderId.name || "User" : "User"}
+                </div>
+              )}
 
         {renderMedia()}
 

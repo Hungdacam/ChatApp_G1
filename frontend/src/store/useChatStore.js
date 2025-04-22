@@ -9,6 +9,19 @@ export const useChatStore = create((set, get) => ({
   isMessagesLoading: false,
   error: null,
   hasAttemptedInitialFetch: false,
+  // Thêm các state mới cho chat nhóm
+  isCreatingGroup: false,
+  isAddingMember: false,
+  isRemovingMember: false,
+  compareIds : (id1, id2) => {
+    if (!id1 || !id2) return false;
+    
+    // Chuyển đổi thành chuỗi để so sánh
+    const str1 = typeof id1 === 'object' && id1._id ? id1._id.toString() : id1.toString();
+    const str2 = typeof id2 === 'object' && id2._id ? id2._id.toString() : id2.toString();
+    
+    return str1 === str2;
+  },
   
   fetchChatList: async () => {
     if (get().isChatsLoading || get().hasAttemptedInitialFetch) return;
@@ -37,8 +50,27 @@ export const useChatStore = create((set, get) => ({
   setHasAttemptedFetch: (value) => set({ hasAttemptedFetch: value }),
   
   selectChat: (chat) => {
-    set({ selectedChat: chat });
+    if (!chat || !chat.chatId) {
+      console.error("Không thể chọn chat không hợp lệ:", chat);
+      return;
+    }
+    
+    const { chats } = get();
+    
+    // Lọc bỏ các phần tử undefined trước khi tìm kiếm
+    const validChats = chats.filter(c => c !== undefined && c !== null);
+    
+    // Tìm chat đầy đủ từ danh sách chats
+    const fullChat = validChats.find(c => c.chatId === chat.chatId) || chat;
+    
+    console.log("Selecting chat:", fullChat);
+    console.log("createdBy:", fullChat.createdBy);
+    console.log("admins:", fullChat.admins);
+    
+    set({ selectedChat: fullChat });
   },
+  
+  
   
   getMessages: async (chatId) => {
     set({ isMessagesLoading: true, error: null });
@@ -311,17 +343,33 @@ export const useChatStore = create((set, get) => ({
       const currentChats = get().chats;
       const newChats = response.data.chats;
       
-      const sortedChats = [...newChats].sort((a, b) => {
-        const timeA = new Date(a.updatedAt || 0).getTime();
-        const timeB = new Date(b.updatedAt || 0).getTime();
-        return timeB - timeA;
-      });
-      
-      if (JSON.stringify(currentChats) !== JSON.stringify(sortedChats)) {
-        set({ chats: sortedChats, isChatsLoading: false, hasAttemptedInitialFetch: true });
-      } else {
-        set({ isChatsLoading: false, hasAttemptedInitialFetch: true });
-      }
+      const { selectedChat } = get();
+  
+  const sortedChats = [...newChats].sort((a, b) => {
+    const timeA = new Date(a.updatedAt || 0).getTime();
+    const timeB = new Date(b.updatedAt || 0).getTime();
+    return timeB - timeA;
+  });
+  
+  // Cập nhật selectedChat nếu nó tồn tại trong danh sách mới
+  let updatedSelectedChat = selectedChat;
+  if (selectedChat) {
+    const freshSelectedChat = sortedChats.find(c => c.chatId === selectedChat.chatId);
+    if (freshSelectedChat) {
+      updatedSelectedChat = freshSelectedChat;
+    }
+  }
+  
+  if (JSON.stringify(currentChats) !== JSON.stringify(sortedChats)) {
+    set({ 
+      chats: sortedChats, 
+      selectedChat: updatedSelectedChat,
+      isChatsLoading: false, 
+      hasAttemptedInitialFetch: true 
+    });
+  } else {
+    set({ isChatsLoading: false, hasAttemptedInitialFetch: true });
+  }
     } catch (error) {
       console.error("Lỗi khi làm mới danh sách chat:", error);
       set({
@@ -331,4 +379,514 @@ export const useChatStore = create((set, get) => ({
       });
     }
   },
+  
+  createGroup: async (groupName, memberIds, avatar) => {
+    set({ isCreatingGroup: true, error: null });
+    try {
+      const formData = new FormData();
+      formData.append('groupName', groupName);
+      formData.append('memberIds', JSON.stringify(memberIds));
+      if (avatar) {
+        formData.append('avatar', avatar);
+      }
+
+      const response = await axios.post("/group/create", formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      console.log("Kết quả tạo nhóm:", response.data);
+      
+      // Cập nhật danh sách chat với nhóm mới
+      const { chats } = get();
+      const newGroup = response.data.chat;
+      
+      set({
+        chats: [newGroup, ...chats],
+        selectedChat: newGroup,
+        isCreatingGroup: false
+      });
+      
+      return newGroup;
+    } catch (error) {
+      console.error("Lỗi khi tạo nhóm:", error);
+      set({
+        error: error.response?.data?.message || "Lỗi khi tạo nhóm",
+        isCreatingGroup: false
+      });
+      throw error;
+    }
+  },
+  // Thêm hàm kiểm tra quyền admin
+  isUserAdmin: (chatId, userId) => {
+    const { chats } = get();
+    const chat = chats.find(c => c.chatId === chatId);
+    
+    if (!chat) return false;
+    
+    // Kiểm tra nếu là người tạo nhóm
+    if (chat.createdBy) {
+      if (typeof chat.createdBy === 'object' && chat.createdBy._id) {
+        if (chat.createdBy._id.toString() === userId.toString()) {
+          return true;
+        }
+      } else if (typeof chat.createdBy === 'string') {
+        if (chat.createdBy === userId) {
+          return true;
+        }
+      } else {
+        if (chat.createdBy.toString() === userId.toString()) {
+          return true;
+        }
+      }
+    }
+    
+    // Kiểm tra trong danh sách admin
+    if (chat.admins && Array.isArray(chat.admins)) {
+      return chat.admins.some(adminId => {
+        if (typeof adminId === 'object' && adminId._id) {
+          return adminId._id.toString() === userId.toString();
+        }
+        return typeof adminId === 'string' ? 
+          adminId === userId : 
+          adminId.toString() === userId.toString();
+      });
+    }
+    
+    return false;
+  },
+  addGroupMember: async (chatId, userId) => {
+    set({ isAddingMember: true, error: null });
+    try {
+      const currentUserId = localStorage.getItem("userId");
+      
+      // Kiểm tra quyền admin
+      if (!get().isUserAdmin(chatId, currentUserId)) {
+        throw new Error("Bạn không có quyền thêm thành viên vào nhóm này");
+      }
+      
+      const response = await axios.post("/group/add-member", { chatId, userId });
+      
+      // Kiểm tra dữ liệu trả về
+      if (!response.data) {
+        throw new Error("Không nhận được dữ liệu từ server");
+      }
+      
+      // Cập nhật thông tin nhóm trong danh sách chat
+      const { chats, selectedChat } = get();
+      
+      // Nếu server trả về chat đầy đủ, sử dụng nó
+      let updatedChat;
+      if (response.data.chat) {
+        updatedChat = {
+          ...response.data.chat,
+          isGroupChat: true,
+          chatId: chatId // Đảm bảo chatId luôn có
+        };
+      } else {
+        // Nếu không, tự tạo updatedChat từ dữ liệu hiện có
+        const chatToUpdate = chats.find(chat => chat.chatId === chatId);
+        if (!chatToUpdate) {
+          throw new Error("Không tìm thấy chat với ID: " + chatId);
+        }
+        
+        // Tìm thông tin người dùng được thêm vào
+        const user = await axios.get(`/user/${userId}`).then(res => res.data.user).catch(() => null);
+        
+        const updatedParticipants = [...chatToUpdate.participants];
+        const userExists = updatedParticipants.some(p => {
+          if (typeof p === 'object' && p._id) {
+            return p._id.toString() === userId.toString();
+          }
+          return p.toString() === userId.toString();
+        });
+        
+        if (!userExists) {
+          if (user) {
+            updatedParticipants.push({
+              _id: userId,
+              name: user.name,
+              avatar: user.avatar
+            });
+          } else {
+            updatedParticipants.push(userId);
+          }
+        }
+        
+        updatedChat = {
+          ...chatToUpdate,
+          participants: updatedParticipants,
+          isGroupChat: true,
+          updatedAt: new Date().toISOString()
+        };
+      }
+      
+      // Cập nhật danh sách chats
+      const updatedChats = chats.map(chat => 
+        chat.chatId === chatId ? updatedChat : chat
+      );
+      
+      set({
+        chats: updatedChats,
+        selectedChat: selectedChat?.chatId === chatId ? updatedChat : selectedChat,
+        isAddingMember: false
+      });
+      
+      return updatedChat;
+    } catch (error) {
+      console.error("Lỗi khi thêm thành viên:", error);
+      set({
+        error: error.response?.data?.message || "Lỗi khi thêm thành viên",
+        isAddingMember: false
+      });
+      throw error;
+    }
+  },
+  
+  
+  removeGroupMember: async (chatId, userId) => {
+    set({ isRemovingMember: true, error: null });
+    try {
+      const currentUserId = localStorage.getItem("userId");
+      
+      // Kiểm tra quyền admin
+      if (!get().isUserAdmin(chatId, currentUserId)) {
+        throw new Error("Bạn không có quyền xóa thành viên khỏi nhóm này");
+      }
+      
+      const response = await axios.post("/group/remove-member", { chatId, userId });
+      
+      // Kiểm tra dữ liệu trả về
+      if (!response.data) {
+        throw new Error("Không nhận được dữ liệu từ server");
+      }
+      
+      // Cập nhật thông tin nhóm trong danh sách chat
+      const { chats, selectedChat } = get();
+      
+      // Nếu server trả về chat đầy đủ, sử dụng nó
+      let updatedChat;
+      if (response.data.chat) {
+        updatedChat = {
+          ...response.data.chat,
+          isGroupChat: true,
+          chatId: chatId // Đảm bảo chatId luôn có
+        };
+      } else {
+        // Nếu không, tự tạo updatedChat từ dữ liệu hiện có
+        const chatToUpdate = chats.find(chat => chat.chatId === chatId);
+        if (!chatToUpdate) {
+          throw new Error("Không tìm thấy chat với ID: " + chatId);
+        }
+        
+        updatedChat = {
+          ...chatToUpdate,
+          participants: chatToUpdate.participants.filter(p => {
+            if (typeof p === 'object' && p._id) {
+              return p._id.toString() !== userId.toString();
+            }
+            return p.toString() !== userId.toString();
+          }),
+          isGroupChat: true,
+          updatedAt: new Date().toISOString()
+        };
+      }
+      
+      // Cập nhật danh sách chats
+      const updatedChats = chats.map(chat => 
+        chat.chatId === chatId ? updatedChat : chat
+      );
+      
+      set({
+        chats: updatedChats,
+        selectedChat: selectedChat?.chatId === chatId ? updatedChat : selectedChat,
+        isRemovingMember: false
+      });
+      
+      return updatedChat;
+    } catch (error) {
+      console.error("Lỗi khi xóa thành viên:", error);
+      set({
+        error: error.response?.data?.message || "Lỗi khi xóa thành viên",
+        isRemovingMember: false
+      });
+      throw error;
+    }
+  },
+  
+  
+  leaveGroup: async (chatId) => {
+    set({ isRemovingMember: true, error: null });
+    try {
+      await axios.post("/group/leave", { chatId });
+      
+      // Xóa nhóm khỏi danh sách chat
+      const { chats, selectedChat } = get();
+      const updatedChats = chats.filter(chat => chat.chatId !== chatId);
+      
+      set({
+        chats: updatedChats,
+        selectedChat: selectedChat?.chatId === chatId ? null : selectedChat,
+        isRemovingMember: false
+      });
+    } catch (error) {
+      console.error("Lỗi khi rời nhóm:", error);
+      set({
+        error: error.response?.data?.message || "Lỗi khi rời nhóm",
+        isRemovingMember: false
+      });
+      throw error;
+    }
+  },
+  
+  assignAdmin: async (chatId, userId) => {
+    set({ error: null });
+    try {
+      const currentUserId = localStorage.getItem("userId");
+      
+      // Kiểm tra quyền admin
+      if (!get().isUserAdmin(chatId, currentUserId)) {
+        throw new Error("Bạn không có quyền gán quyền admin");
+      }
+      
+      const response = await axios.post("/group/assign-admin", { chatId, userId });
+      
+      // Kiểm tra response
+      if (!response.data) {
+        throw new Error("Không nhận được dữ liệu từ server");
+      }
+      
+      // Cập nhật thông tin nhóm trong danh sách chat
+      const { chats, selectedChat } = get();
+      
+      // Lọc bỏ các phần tử undefined
+      const validChats = chats.filter(chat => chat !== undefined && chat !== null);
+      
+      // Tìm chat cần cập nhật
+      const chatToUpdate = validChats.find(chat => chat.chatId === chatId);
+      
+      if (!chatToUpdate) {
+        throw new Error("Không tìm thấy chat với ID: " + chatId);
+      }
+      
+      // Cập nhật danh sách admin
+      let updatedAdmins = [...(chatToUpdate.admins || [])];
+      if (!updatedAdmins.includes(userId)) {
+        updatedAdmins.push(userId);
+      }
+      
+      // Tạo chat mới với admins đã cập nhật
+      const updatedChat = {
+        ...chatToUpdate,
+        admins: updatedAdmins,
+        isGroupChat: true
+      };
+      
+      // Cập nhật danh sách chats
+      const updatedChats = validChats.map(chat => 
+        chat.chatId === chatId ? updatedChat : chat
+      );
+      
+      // Cập nhật selectedChat nếu cần
+      let updatedSelectedChat = selectedChat;
+      if (selectedChat && selectedChat.chatId === chatId) {
+        updatedSelectedChat = updatedChat;
+      }
+      
+      // Cập nhật state
+      set({
+        chats: updatedChats,
+        selectedChat: updatedSelectedChat
+      });
+      
+      return updatedChat;
+    } catch (error) {
+      console.error("Lỗi khi gán quyền admin:", error);
+      set({
+        error: error.response?.data?.message || "Lỗi khi gán quyền admin"
+      });
+      throw error;
+    }
+  },
+  
+  
+  
+  removeAdmin: async (chatId, userId) => {
+    console.log("removeAdmin được gọi với chatId:", chatId, "userId:", userId);
+    set({ error: null });
+    try {
+      const currentUserId = localStorage.getItem("userId");
+      
+      // Kiểm tra quyền admin
+      if (!get().isUserAdmin(chatId, currentUserId)) {
+        throw new Error("Bạn không có quyền xóa quyền admin");
+      }
+      
+      const response = await axios.post("/group/remove-admin", { chatId, userId });
+      
+      // Kiểm tra response
+      if (!response.data) {
+        throw new Error("Không nhận được dữ liệu từ server");
+      }
+      
+      // Cập nhật thông tin nhóm trong danh sách chat
+      const { chats, selectedChat } = get();
+      
+      // Lọc bỏ các phần tử undefined
+      const validChats = chats.filter(chat => chat !== undefined && chat !== null);
+      
+      // Tìm chat cần cập nhật
+      const chatToUpdate = validChats.find(chat => chat.chatId === chatId);
+      
+      if (!chatToUpdate) {
+        throw new Error("Không tìm thấy chat với ID: " + chatId);
+      }
+      
+      // Cập nhật danh sách admin
+      let updatedAdmins = [...(chatToUpdate.admins || [])].filter(adminId => {
+        if (typeof adminId === 'object' && adminId._id) {
+          return adminId._id.toString() !== userId.toString();
+        }
+        return adminId.toString() !== userId.toString();
+      });
+      
+      // Tạo chat mới với admins đã cập nhật
+      const updatedChat = {
+        ...chatToUpdate,
+        admins: updatedAdmins,
+        isGroupChat: true
+      };
+      
+      // Cập nhật danh sách chats
+      const updatedChats = validChats.map(chat => 
+        chat.chatId === chatId ? updatedChat : chat
+      );
+      
+      // Cập nhật selectedChat nếu cần
+      let updatedSelectedChat = selectedChat;
+      if (selectedChat && selectedChat.chatId === chatId) {
+        updatedSelectedChat = updatedChat;
+      }
+      
+      // Cập nhật state
+      set({
+        chats: updatedChats,
+        selectedChat: updatedSelectedChat
+      });
+      
+      return updatedChat;
+    } catch (error) {
+      console.error("Lỗi khi xóa quyền admin:", error);
+      set({
+        error: error.response?.data?.message || "Lỗi khi xóa quyền admin"
+      });
+      throw error;
+    }
+  },
+  
+  
+  
+  dissolveGroup: async (chatId) => {
+    set({ error: null });
+    try {
+      const currentUserId = localStorage.getItem("userId");
+      const { chats } = get();
+      const chat = chats.find(c => c.chatId === chatId);
+      
+      // Kiểm tra xem người dùng có phải là người tạo nhóm không
+      if (!chat || !chat.createdBy) {
+        throw new Error("Không tìm thấy thông tin nhóm");
+      }
+      
+      let isCreator = false;
+      if (typeof chat.createdBy === 'object' && chat.createdBy._id) {
+        isCreator = chat.createdBy._id.toString() === currentUserId.toString();
+      } else if (typeof chat.createdBy === 'string') {
+        isCreator = chat.createdBy === currentUserId;
+      } else {
+        isCreator = chat.createdBy.toString() === currentUserId.toString();
+      }
+      
+      if (!isCreator) {
+        throw new Error("Chỉ người tạo nhóm mới có quyền giải tán nhóm");
+      }
+      await axios.post("/group/dissolve", { chatId });
+      
+      // Xóa nhóm khỏi danh sách chat
+      const {selectedChat } = get();
+      const updatedChats = chats.filter(chat => chat.chatId !== chatId);
+      
+      set({
+        chats: updatedChats,
+        selectedChat: selectedChat?.chatId === chatId ? null : selectedChat
+      });
+    } catch (error) {
+      console.error("Lỗi khi giải tán nhóm:", error);
+      set({
+        error: error.response?.data?.message || "Lỗi khi giải tán nhóm"
+      });
+      throw error;
+    }
+  },
+  
+  updateGroupAvatar: async (chatId, avatarFile) => {
+    set({ isUpdatingAvatar: true, error: null });
+    try {
+      const currentUserId = localStorage.getItem("userId");
+      
+      // Kiểm tra quyền admin
+      if (!get().isUserAdmin(chatId, currentUserId)) {
+        throw new Error("Bạn không có quyền cập nhật ảnh nhóm");
+      }
+      
+      // Kiểm tra file
+      if (!avatarFile) {
+        throw new Error("Vui lòng chọn file ảnh");
+      }
+      
+      // Tạo FormData
+      const formData = new FormData();
+      formData.append('avatar', avatarFile);
+      formData.append('chatId', chatId);
+      
+      // Gửi request không cần thiết lập Content-Type
+      const response = await axios.post("/group/update-avatar", formData, {
+        headers: {
+          // Không thiết lập Content-Type để browser tự thêm boundary
+        }
+      });
+      
+      // Xử lý kết quả
+      if (!response.data) {
+        throw new Error("Không nhận được dữ liệu từ server");
+      }
+      
+      const avatar = response.data.avatar;
+      
+      // Cập nhật thông tin nhóm trong danh sách chat
+      const { chats, selectedChat } = get();
+      const updatedChats = chats.map(chat =>
+        chat.chatId === chatId ? {...chat, avatar} : chat
+      );
+      
+      set({
+        chats: updatedChats,
+        selectedChat: selectedChat?.chatId === chatId ?
+          {...selectedChat, avatar} : selectedChat,
+        isUpdatingAvatar: false
+      });
+      
+      return response.data;
+    } catch (error) {
+      console.error("Lỗi khi cập nhật ảnh nhóm:", error);
+      const errorMessage = error.response?.data?.message || "Lỗi khi cập nhật ảnh nhóm";
+      set({
+        error: errorMessage,
+        isUpdatingAvatar: false
+      });
+      throw error;
+    }
+  }
+  
 }));

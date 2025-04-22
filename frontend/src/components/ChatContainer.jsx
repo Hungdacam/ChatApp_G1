@@ -13,10 +13,12 @@ const ChatContainer = () => {
   const [currentUserId, setCurrentUserId] = useState(null);
 
   useEffect(() => {
+    console.log("Tất cả các key trong localStorage:", Object.keys(localStorage));
     const userId = localStorage.getItem("userId");
+    console.log("userId từ localStorage:", userId);
     setCurrentUserId(userId);
   }, []);
-
+  console.log("currentUserId khi render:", currentUserId);
   useEffect(() => {
     if (selectedChat && selectedChat.chatId) {
       getMessages(selectedChat.chatId);
@@ -74,6 +76,7 @@ const ChatContainer = () => {
                   key={message.messageId || message._id}
                   message={message}
                   currentUserId={currentUserId}
+                  isGroupChat={selectedChat.isGroupChat} 
                 />
               ))}
             <div ref={messageEndRef} />
