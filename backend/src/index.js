@@ -3,6 +3,7 @@ const authRoutes = require('./routes/auth.route');
 const messageRoutes = require('./routes/message.route');
 const friendRoutes = require('./routes/friends.route');
 const chatRoutes = require('./routes/chat.route');
+const groupRoutes = require('./routes/group.route');
 const http = require('http');
 const socketio = require('socket.io');
 
@@ -34,7 +35,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/message', messageRoutes);
 app.use("/api/chat", chatRoutes);
 app.use('/api/friends', friendRoutes);
-
+app.use('/api/group',groupRoutes );
 const server = http.createServer(app);
 
 const io = socketio(server, {

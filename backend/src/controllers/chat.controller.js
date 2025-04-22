@@ -93,7 +93,7 @@ exports.getMessages = async (req, res) => {
 
   try {
     const messages = await Message.find({ chatId })
-      .populate("senderId", "name avatar")
+      .populate("senderId", "_id name avatar")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
@@ -109,18 +109,13 @@ exports.getChatList = async (req, res) => {
   const userId = req.user._id;
 
   try {
-    const chats = await Chat.find({
-      participants: userId,
-      isGroupChat: false,
-    })
+    // Lấy cả chat 1-1 và nhóm chat
+    const chats = await Chat.find({ participants: userId })
       .populate("participants", "name avatar")
       .sort({ updatedAt: -1 });
 
     const chatList = await Promise.all(
       chats.map(async (chat) => {
-        const otherParticipant = chat.participants.find(
-          (p) => p._id.toString() !== userId.toString()
-        );
         const lastMessage = await Message.findOne({ chatId: chat.chatId })
           .sort({ createdAt: -1 })
           .select("content createdAt isRead senderId");
@@ -131,17 +126,39 @@ exports.getChatList = async (req, res) => {
           lastMessage.senderId.toString() !== userId.toString() &&
           !lastMessage.isRead;
 
-        return {
-          chatId: chat.chatId,
-          name: otherParticipant ? otherParticipant.name : "Unknown",
-          avatar: otherParticipant?.avatar || "https://via.placeholder.com/50",
-          lastMessage: lastMessage ? lastMessage.content : "",
-          currentUserId: userId,
-          participants: chat.participants,
-          hasUnread: hasUnread || false,
-        };
+        if (chat.isGroupChat) {
+          // Xử lý nhóm chat
+          return {
+            chatId: chat.chatId,
+            name: chat.groupName || "Nhóm không tên",
+            avatar: chat.avatar || "https://via.placeholder.com/50",
+            lastMessage: lastMessage ? lastMessage.content : "",
+            currentUserId: userId,
+            participants: chat.participants,
+            hasUnread: hasUnread || false,
+            isGroupChat: true,
+            admins: chat.admins || [], // Thêm danh sách admin
+            createdBy: chat.createdBy // Thêm người tạo nhóm
+          };
+        } else {
+          // Xử lý chat 1-1
+          const otherParticipant = chat.participants.find(
+            (p) => p._id.toString() !== userId.toString()
+          );
+          return {
+            chatId: chat.chatId,
+            name: otherParticipant ? otherParticipant.name : "Unknown",
+            avatar: otherParticipant?.avatar || "https://via.placeholder.com/50",
+            lastMessage: lastMessage ? lastMessage.content : "",
+            currentUserId: userId,
+            participants: chat.participants,
+            hasUnread: hasUnread || false,
+            isGroupChat: false,
+          };
+        }
       })
     );
+
     res.json({ chats: chatList });
   } catch (error) {
     console.error("Lỗi lấy danh sách chat:", error);
@@ -242,8 +259,8 @@ exports.sendFile = async (req, res) => {
   try {
     const { chatId, receiverId } = req.body;
 
-    console.log("Request body:", req.body); // Debug
-    console.log("Request file:", req.file); // Debug
+    console.log("Request body:", req.body); 
+    console.log("Request file:", req.file); 
 
     if (!req.user || !req.user._id) {
       return res.status(401).json({ message: "Không tìm thấy người dùng. Vui lòng đăng nhập lại." });
@@ -265,7 +282,7 @@ exports.sendFile = async (req, res) => {
     };
 
     const uploadResult = await s3.upload(params).promise();
-    console.log("File uploaded to S3:", uploadResult.Location); // Debug
+    console.log("File uploaded to S3:", uploadResult.Location); 
 
     const newMessage = new Message({
       messageId: uuidv4(),
@@ -280,7 +297,7 @@ exports.sendFile = async (req, res) => {
     });
 
     await newMessage.save();
-    console.log("Saved message:", newMessage); // Debug
+    console.log("Saved message:", newMessage); 
 
     req.app.get("io").to(chatId).emit("new_message", { message: newMessage });
 
@@ -288,5 +305,39 @@ exports.sendFile = async (req, res) => {
   } catch (error) {
     console.error("Lỗi gửi tệp:", error);
     res.status(500).json({ message: "Không thể gửi tệp." });
+  }
+};
+
+exports.getChatDetails = async (req, res) => {
+  try {
+    const { chatId } = req.params;
+    const userId = req.user._id;
+
+    // Tìm chat theo chatId và đảm bảo user là thành viên
+    const chat = await Chat.findOne({ chatId, participants: userId }).populate(
+      "participants",
+      "_id name avatar"
+    );
+
+    if (!chat) {
+      return res.status(404).json({ message: "Nhóm không tồn tại hoặc bạn không phải thành viên" });
+    }
+
+    // Lấy danh sách admin và creator
+    const admins = chat.admins.map((adminId) => adminId.toString());
+    const createdBy = chat.createdBy.toString();
+
+    res.status(200).json({
+      chatId: chat.chatId,
+      groupName: chat.groupName,
+      avatar: chat.avatar || "https://via.placeholder.com/50",
+      participants: chat.participants,
+      admins,
+      createdBy,
+      isGroupChat: chat.isGroupChat,
+    });
+  } catch (error) {
+    console.error("Lỗi lấy chi tiết nhóm:", error);
+    res.status(500).json({ message: "Lỗi server", error: error.message });
   }
 };

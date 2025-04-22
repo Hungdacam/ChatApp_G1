@@ -1,8 +1,8 @@
-const User = require('../models/user.model');
-const bcrypt = require('bcryptjs');
-const cloudinary = require('../config/cloudinary');
-const generateToken = require('../config/utils');
-const { client, serviceSid } = require('../config/twilio');
+const User = require("../models/user.model");
+const bcrypt = require("bcryptjs");
+const cloudinary = require("../config/cloudinary");
+const generateToken = require("../config/utils");
+const { client, serviceSid } = require("../config/twilio");
 const jwt = require('jsonwebtoken');
 // 📌 1. Gửi OTP tới số điện thoại đăng ký
 const sendSignupOTP = async (req, res) => {
@@ -16,8 +16,9 @@ const sendSignupOTP = async (req, res) => {
     phone = `+84${phone.replace(/^0/, "")}`;
   }
   try {
-    await client.verify.v2.services(serviceSid)
-      .verifications.create({ to: phone, channel: 'sms' });
+    await client.verify.v2
+      .services(serviceSid)
+      .verifications.create({ to: phone, channel: "sms" });
 
     res.status(200).json({ success: true, message: "Đã gửi mã OTP." });
   } catch (err) {
@@ -36,11 +37,14 @@ const verifyAndSignup = async (req, res) => {
 
   try {
     // ✅ Xác minh OTP
-    const check = await client.verify.v2.services(serviceSid)
+    const check = await client.verify.v2
+      .services(serviceSid)
       .verificationChecks.create({ to: phone, code });
 
-    if (check.status !== 'approved') {
-      return res.status(400).json({ message: "OTP không hợp lệ hoặc đã hết hạn" });
+    if (check.status !== "approved") {
+      return res
+        .status(400)
+        .json({ message: "OTP không hợp lệ hoặc đã hết hạn" });
     }
 
     // ✅ Kiểm tra tài khoản đã tồn tại
@@ -48,7 +52,9 @@ const verifyAndSignup = async (req, res) => {
     const existingEmail = await User.findOne({ email });
 
     if (existingPhone || existingEmail) {
-      return res.status(400).json({ message: "Email hoặc số điện thoại đã tồn tại" });
+      return res
+        .status(400)
+        .json({ message: "Email hoặc số điện thoại đã tồn tại" });
     }
 
     // ✅ Upload avatar nếu có
@@ -72,7 +78,7 @@ const verifyAndSignup = async (req, res) => {
     });
 
     // ✅ Sinh JWT và trả về dữ liệu
-    const clientType = req.headers['x-client-type'] || 'mobile';
+    const clientType = req.headers["x-client-type"] || "mobile";
     const token = generateToken(newUser._id, res, clientType);
 
     const userData = {
@@ -86,15 +92,22 @@ const verifyAndSignup = async (req, res) => {
       createAt: newUser.createAt,
     };
 
-    if (clientType === 'web') {
-      return res.status(201).json({ message: "Đăng ký thành công (Web)", user: userData });
+    if (clientType === "web") {
+      return res
+        .status(201)
+        .json({ message: "Đăng ký thành công (Web)", user: userData });
     } else {
-      return res.status(201).json({ message: "Đăng ký thành công (Mobile)", token, user: userData });
+      return res.status(201).json({
+        message: "Đăng ký thành công (Mobile)",
+        token,
+        user: userData,
+      });
     }
-
   } catch (err) {
     console.error("Lỗi xác minh và đăng ký:", err.message);
-    return res.status(500).json({ message: "Lỗi máy chủ khi xác minh OTP và tạo tài khoản" });
+    return res
+      .status(500)
+      .json({ message: "Lỗi máy chủ khi xác minh OTP và tạo tài khoản" });
   }
 };
 
@@ -105,7 +118,9 @@ const login = async (req, res) => {
 
   try {
     if (!phone || !password) {
-      return res.status(400).json({ message: "Vui lòng điền số điện thoại và mật khẩu" });
+      return res
+        .status(400)
+        .json({ message: "Vui lòng điền số điện thoại và mật khẩu" });
     }
 
     // Định dạng số điện thoại nếu cần
@@ -114,13 +129,16 @@ const login = async (req, res) => {
       formattedPhone = `+84${phone.replace(/^0/, "")}`;
     }
 
-    const user = await User.findOne({ phone: formattedPhone }).select('+password');
-    if (!user) return res.status(401).json({ message: "Số điện thoại không tồn tại" });
+     // Thêm .select('+password') để lấy cả trường password
+     const user = await User.findOne({ phone: formattedPhone }).select('+password');
+    if (!user)
+      return res.status(401).json({ message: "Số điện thoại không tồn tại" });
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(401).json({ message: "Mật khẩu không đúng" });
+    if (!isMatch)
+      return res.status(401).json({ message: "Mật khẩu không đúng" });
 
-    const clientType = req.headers['x-client-type'] || 'mobile';
+    const clientType = req.headers["x-client-type"] || "mobile";
     const token = generateToken(user._id, res, clientType);
 
     const userData = {
@@ -148,7 +166,10 @@ const login = async (req, res) => {
 
 // 📌 Đăng xuất (nếu dùng cookie cho web)
 const logout = (req, res) => {
-  res.clearCookie("token").status(200).json({ message: "Đăng xuất thành công" });
+  res
+    .clearCookie("token")
+    .status(200)
+    .json({ message: "Đăng xuất thành công" });
 };
 
 // 📌 Cập nhật hồ sơ
@@ -181,6 +202,29 @@ const updateProfile = async (req, res) => {
     res.status(500).json({ message: "Lỗi máy chủ khi cập nhật hồ sơ" });
   }
 };
+const updateUserImg = async (req, res) => {
+  try {
+    const { name, email, phone, dob, gender, avatar } = req.body;
+    const userId = req.user._id;
+    const updateFields = {};
+    if (name !== undefined) updateFields.name = name;
+    if (email !== undefined) updateFields.email = email;
+    if (phone !== undefined) updateFields.phone = phone;
+    if (dob !== undefined) updateFields.dob = dob;
+    if (gender !== undefined) updateFields.gender = gender;
+    if (avatar !== undefined) updateFields.avatar = avatar;
+    const updateUser = await User.findByIdAndUpdate(userId, updateFields, {
+      new: true,
+    });
+    if (!updateUser) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng." });
+    }
+    res.status(200).json(updateUser);
+  } catch (error) {
+    console.error("Lỗi cập nhật người dùng:", error.message);
+    res.status(500).json({ message: "Đã xảy ra lỗi khi cập nhật người dùng." });
+  }
+};
 
 // 📌 Kiểm tra người dùng đang đăng nhập
 const checkAuth = async (req, res) => {
@@ -198,6 +242,32 @@ const checkAuth = async (req, res) => {
     createAt: user.createAt,
   });
 };
+
+const findByPhone = async (req, res) => {
+  const { phone } = req.body;
+
+  try {
+    const user = await User.findOne({ phone });
+
+    if (!user) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng" });
+    }
+
+    return res.status(200).json({
+      id: user._id,
+      name: user.name,
+      avatar: user.avatar,
+      phone: user.phone,
+      email: user.email,
+      dob: user.dob,
+      gender: user.gender,
+    });
+  } catch (error) {
+    console.error("Lỗi tìm người dùng:", error.message);
+    return res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
 //send otp quen mk 
 const sendForgotPasswordOTP = async (req, res) => {
   let { phone } = req.body;
@@ -280,7 +350,7 @@ const resetPassword = async (req, res) => {
     const decoded = jwt.verify(resetToken, process.env.JWT_SECRET);
     const phone = decoded.phone;
 
-    const user = await User.findOne({ phone });
+    const user = await User.findOne({ phone }).select('+password');
     if (!user) {
       return res.status(404).json({ message: "Không tìm thấy người dùng" });
     }
@@ -296,6 +366,7 @@ const resetPassword = async (req, res) => {
   }
 };
 const changePassword = async (req, res) => {
+  console.log("Body nhận được từ client:", req.body);
   try {
     const { currentPassword, newPassword, confirmPassword } = req.body;
 
@@ -317,6 +388,10 @@ const changePassword = async (req, res) => {
       return res.status(400).json({ message: 'Mật khẩu mới và xác nhận mật khẩu không khớp' });
     }
 
+    if (newPassword == currentPassword) {
+      return res.status(400).json({ message: 'Mật khẩu mới và mật khẩu hiện tại không được trùng' });
+    }
+
     if (newPassword.length < 6) {
       return res.status(400).json({ message: 'Mật khẩu mới phải có ít nhất 6 ký tự' });
     }
@@ -333,30 +408,6 @@ const changePassword = async (req, res) => {
   }
 };
 
-const findByPhone = async (req, res) => {
-  const { phone } = req.body;
-
-  try {
-    const user = await User.findOne({ phone });
-
-    if (!user) {
-      return res.status(404).json({ message: "Không tìm thấy người dùng" });
-    }
-
-    return res.status(200).json({
-      id: user._id,
-      name: user.name,
-      avatar: user.avatar,
-      phone: user.phone,
-      email: user.email,
-      dob: user.dob,
-      gender: user.gender,
-    });
-  } catch (error) {
-    console.error("Lỗi tìm người dùng:", error.message);
-    return res.status(500).json({ message: "Lỗi server" });
-  }
-};
 
 module.exports = {
   sendSignupOTP,
@@ -365,9 +416,10 @@ module.exports = {
   logout,
   updateProfile,
   checkAuth,
-  sendForgotPasswordOTP,
-  verifyForgotPasswordOTP,
+  findByPhone,
   resetPassword,
   changePassword,
-  findByPhone
+  verifyForgotPasswordOTP,
+  sendForgotPasswordOTP,
+  updateUserImg
 };
