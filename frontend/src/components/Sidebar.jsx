@@ -39,14 +39,19 @@ const Sidebar = () => {
   const safeOnlineUsers = Array.isArray(onlineUsers) ? onlineUsers : [];
 
   const filteredChats = showOnlineOnly
-    ? safeChats.filter((chat) => {
+    ? safeChats.filter((chat, index, self) => {
       if (!chat || chat.isGroupChat === undefined || chat.isGroupChat) return false;
         const otherParticipant = chat.participants?.find(
           (p) => p._id?.toString() !== chat.currentUserId?.toString()
         );
-        return otherParticipant && safeOnlineUsers.includes(otherParticipant._id);
-      })
-    : safeChats;
+        return otherParticipant && 
+        safeOnlineUsers.includes(otherParticipant._id) && 
+        index === self.findIndex(c => c.chatId === chat.chatId);
+})
+: safeChats.filter((chat, index, self) => 
+ // Chỉ lọc để loại bỏ trùng lặp
+ index === self.findIndex(c => c.chatId === chat.chatId)
+);
 
   console.log("filteredChats:", filteredChats);
 

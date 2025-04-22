@@ -67,20 +67,31 @@ exports.createGroup = async (req, res) => {
 
     const io = req.app.get("io");
     const onlineUsers = req.app.get("onlineUsers");
-    
-    participants.forEach((userId) => {
-      const socketId = onlineUsers.get(userId.toString());
-      if (socketId) {
-        io.to(socketId).emit("new_group_created", {
-          chatId,
-          groupName,
-          participants,
-          avatar,
-        });
-      }
-    });
 
-    res.status(201).json({ message: "Tạo nhóm thành công", chatId, avatar });
+    const fullChat = await Chat.findOne({ chatId })
+      .populate('participants', 'name avatar')
+      .populate('admins', 'name avatar')
+      .populate('createdBy', 'name avatar');
+    
+      participants.forEach((userId) => {
+        const socketId = onlineUsers.get(userId.toString());
+        if (socketId) {
+          io.to(socketId).emit("new_group_created", {
+            chat: fullChat, // Gửi đầy đủ thông tin chat
+            chatId,
+            groupName,
+            participants,
+            avatar,
+          });
+        }
+      });
+
+      res.status(201).json({ 
+        message: "Tạo nhóm thành công", 
+        chatId, 
+        avatar,
+        chat: fullChat // Trả về đầy đủ thông tin chat
+      });
   } catch (error) {
     console.error("Lỗi tạo nhóm:", error);
     res.status(500).json({ message: "Lỗi server", error: error.message });

@@ -408,15 +408,41 @@ export const useChatStore = create((set, get) => ({
 
       console.log("Kết quả tạo nhóm:", response.data);
       
-      // Cập nhật danh sách chat với nhóm mới
-      const { chats } = get();
-      const newGroup = response.data.chat;
+     
+       // Sử dụng chat đầy đủ từ response nếu có
+      const newGroup = response.data.chat || {
+        chatId: response.data.chatId,
+        groupName: groupName,
+        avatar: response.data.avatar,
+        participants: [...memberIds, localStorage.getItem("userId")],
+        isGroupChat: true,
+        createdBy: localStorage.getItem("userId"),
+        admins: [localStorage.getItem("userId")],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+       // Đảm bảo nhóm có thuộc tính isGroupChat
+      newGroup.isGroupChat = true;
+
+       // Cập nhật danh sách chat với nhóm mới
+       const { chats } = get();
+      // Kiểm tra xem nhóm đã tồn tại trong danh sách chưa
+      const existingChat = chats.find(chat => chat.chatId === newGroup.chatId);
       
-      set({
-        chats: [newGroup, ...chats],
-        selectedChat: newGroup,
-        isCreatingGroup: false
-      });
+      if (!existingChat) {
+        // Chỉ thêm vào nếu chưa tồn tại
+        set({
+          chats: [newGroup, ...chats],
+          selectedChat: newGroup,
+          isCreatingGroup: false
+        });
+      } else {
+        // Nếu đã tồn tại, chỉ cập nhật selectedChat
+        set({
+          selectedChat: existingChat,
+          isCreatingGroup: false
+        });
+      }
       
       return newGroup;
     } catch (error) {

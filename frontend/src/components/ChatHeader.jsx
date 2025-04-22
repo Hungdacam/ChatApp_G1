@@ -29,7 +29,7 @@ const ChatHeader = () => {
         >
           <img
             src={selectedChat.avatar || '/default-group.png'}
-            alt={selectedChat.groupName || 'Nhóm chat'}
+            alt={selectedChat.name || 'Nhóm chat'}
             className="w-10 h-10 rounded-full mr-3"
           />
           <div>

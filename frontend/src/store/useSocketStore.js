@@ -229,15 +229,15 @@ export const useSocketStore = create((set) => ({
       console.log("Nhóm đã bị giải tán:", data);
       const chatStore = useChatStore.getState();
       const { chats, selectedChat } = chatStore;
-      
       // Xóa nhóm khỏi danh sách chat
       const updatedChats = chats.filter(chat => chat.chatId !== data.chatId);
-      
-      chatStore.setState({ 
+      chatStore.setState({
         chats: updatedChats,
         selectedChat: selectedChat?.chatId === data.chatId ? null : selectedChat
       });
     });
+    
+    
     
     // Thay thế đoạn code lỗi trong sự kiện admin_assigned
 socket.on("admin_assigned", (data) => {
@@ -465,23 +465,38 @@ socket.on("admin_assigned", (data) => {
     socket.on("new_group_created", (data) => {
       console.log("Nhóm mới được tạo:", data);
       const chatStore = useChatStore.getState();
-      const { chats, refreshChatList } = chatStore;
+      const { chats } = chatStore;
+      
+      // Tạo đối tượng chat đầy đủ từ dữ liệu nhận được
+      const newChat = data.chat || {
+        chatId: data.chatId,
+        groupName: data.groupName,
+        participants: data.participants,
+        avatar: data.avatar,
+        isGroupChat: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      // Đảm bảo chat có thuộc tính isGroupChat
+      newChat.isGroupChat = true;
       
       // Kiểm tra xem nhóm đã tồn tại trong danh sách chưa
-      const existingChat = chats.find(chat => chat.chatId === data.chat.chatId);
-      if (!existingChat) {
-        // Thêm nhóm mới vào danh sách chat
-        chatStore.setState({
+      const existingChat = chats.find(chat => chat.chatId === data.chatId || (data.chat && chat.chatId === data.chat.chatId));
+      
+      if (!existingChat && data.chat) {
+        // Sử dụng hàm setter của store thay vì setState
+        useChatStore.setState({
           chats: [data.chat, ...chats]
         });
         
         // Hiển thị thông báo
-        toast.success(`Bạn đã được thêm vào nhóm "${data.chat.groupName}"`);
+        toast.success(`Bạn đã được thêm vào nhóm "${newChat.groupName || 'Nhóm chat mới'}"`);
       } else {
-        // Nếu đã tồn tại, làm mới danh sách chat để cập nhật thông tin mới nhất
-        refreshChatList(true);
+        chatStore.refreshChatList(true);
       }
     });
+    
     
     
     
