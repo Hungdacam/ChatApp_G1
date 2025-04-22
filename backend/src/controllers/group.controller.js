@@ -122,6 +122,7 @@ exports.addGroupMember = async (req, res) => {
     const io = req.app.get("io");
     const onlineUsers = req.app.get("onlineUsers");
     
+    // Thông báo cho tất cả thành viên hiện tại (trừ thành viên mới)
     chat.participants.forEach((participantId) => {
       const socketId = onlineUsers.get(participantId.toString());
       if (socketId) {
@@ -129,11 +130,21 @@ exports.addGroupMember = async (req, res) => {
           chatId,
           userId,
           userName: user.name,
-          chat: updatedChat // Thêm đối tượng chat đầy đủ
+          userAvatar: user.avatar,
+          chat: updatedChat // Gửi đầy đủ thông tin chat
         });
       }
     });
-    
+    const newMemberSocketId = onlineUsers.get(userId.toString());
+    if (newMemberSocketId) {
+      io.to(newMemberSocketId).emit("new_group_created", {
+        chatId,
+        groupName: chat.groupName,
+        participants: updatedChat.participants,
+        avatar: chat.avatar,
+        chat: updatedChat
+      });
+    }
     res.status(200).json({ 
       message: "Thêm thành viên mới thành công",
       chat: updatedChat
