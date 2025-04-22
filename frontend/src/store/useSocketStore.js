@@ -123,59 +123,41 @@ export const useSocketStore = create((set) => ({
         console.error("Dữ liệu không hợp lệ từ sự kiện group_member_added:", data);
         return;
       }
-      
+    
       const chatStore = useChatStore.getState();
       const { chats, selectedChat } = chatStore;
-      
-      // Tìm chat trong danh sách hiện tại
-      const chatToUpdate = chats.find(chat => chat.chatId === data.chatId);
-      
-      if (!chatToUpdate) {
-        console.error("Không tìm thấy chat với ID:", data.chatId);
+    
+      // Nếu server trả về chat đầy đủ, sử dụng nó
+      if (data.chat) {
+        // Đảm bảo chat có đủ thuộc tính cần thiết
+        const finalChat = {
+          ...data.chat,
+          isGroupChat: true,
+          chatId: data.chatId
+        };
+    
+        // Cập nhật danh sách chat
+        const updatedChats = chats.map(chat =>
+          chat.chatId === data.chatId ? finalChat : chat
+        );
+    
+        // Cập nhật state đúng cách
+        useChatStore.setState({
+          chats: updatedChats,
+          selectedChat: selectedChat?.chatId === data.chatId ? finalChat : selectedChat
+        });
+    
+        
+    
+        // Hiển thị thông báo
+        toast.success(`${data.userName || 'Thành viên mới'} đã được thêm vào nhóm`);
         return;
       }
-      
-      // Tạo chat mới với thành viên đã cập nhật
-      const updatedChat = {
-        ...chatToUpdate,
-        participants: [...chatToUpdate.participants]
-      };
-      
-      // Thêm thành viên mới nếu chưa tồn tại
-      const userExists = updatedChat.participants.some(p => {
-        if (typeof p === 'object' && p._id) {
-          return p._id.toString() === data.userId.toString();
-        }
-        return p.toString() === data.userId.toString();
-      });
-      
-      if (!userExists) {
-        // Nếu có thông tin đầy đủ về người dùng
-        if (data.userName) {
-          updatedChat.participants.push({
-            _id: data.userId,
-            name: data.userName,
-            avatar: data.userAvatar || "https://via.placeholder.com/50"
-          });
-        } else {
-          // Nếu chỉ có ID
-          updatedChat.participants.push(data.userId);
-        }
-      }
-      
-      // Sử dụng dữ liệu từ server nếu có
-      const finalChat = data.chat || updatedChat;
-      
-      // Cập nhật thông tin nhóm trong danh sách chat
-      const updatedChats = chats.map(chat =>
-        chat.chatId === data.chatId ? finalChat : chat
-      );
-      
-      chatStore.setState({
-        chats: updatedChats,
-        selectedChat: selectedChat?.chatId === data.chatId ? finalChat : selectedChat
-      });
-    });
+    
+      // Nếu không có chat đầy đủ, làm mới danh sách chat
+      useChatStore.getState().refreshChatList(true);
+    }),
+    
     
     
     socket.on("group_member_removed", (data) => {
@@ -184,18 +166,16 @@ export const useSocketStore = create((set) => ({
         console.error("Dữ liệu không hợp lệ từ sự kiện group_member_removed:", data);
         return;
       }
-      
-      const chatStore = useChatStore.getState();
-      const { chats, selectedChat } = chatStore;
-      
+    
+      const { chats, selectedChat } = useChatStore.getState();
+    
       // Tìm chat trong danh sách hiện tại
       const chatToUpdate = chats.find(chat => chat.chatId === data.chatId);
-      
       if (!chatToUpdate) {
         console.error("Không tìm thấy chat với ID:", data.chatId);
         return;
       }
-      
+    
       // Cập nhật danh sách participants
       const updatedChat = {
         ...chatToUpdate,
@@ -215,17 +195,19 @@ export const useSocketStore = create((set) => ({
         createdBy: chatToUpdate.createdBy,
         updatedAt: new Date().toISOString()
       };
-      
+    
       // Cập nhật thông tin nhóm trong danh sách chat
       const updatedChats = chats.map(chat =>
         chat.chatId === data.chatId ? updatedChat : chat
       );
-      
-      chatStore.setState({
+    
+      // Cập nhật state đúng cách
+      useChatStore.setState({
         chats: updatedChats,
         selectedChat: selectedChat?.chatId === data.chatId ? updatedChat : selectedChat
       });
     });
+    
     
     
     

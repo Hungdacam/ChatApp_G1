@@ -7,11 +7,7 @@ import AddMemberModal from './AddMemberModal';
 import { useMemo } from 'react';
 import { useEffect } from 'react';
 const GroupChatInfo = ({ onClose }) => {
-  // Thêm vào đầu file GroupChatInfo.jsx
-  useEffect(() => {
-    console.log("Store data:", useChatStore.getState());
-    console.log("Auth data:", useAuthStore.getState());
-  }, []);
+  
 
   const { selectedChat, leaveGroup, removeGroupMember, assignAdmin, removeAdmin, dissolveGroup, updateGroupAvatar } = useChatStore();
   const { authUser } = useAuthStore();
@@ -19,7 +15,12 @@ const GroupChatInfo = ({ onClose }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [showAddMember, setShowAddMember] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
-  
+  // Thêm useEffect để lắng nghe thay đổi của selectedChat
+  useEffect(() => {
+    // Khi selectedChat thay đổi, component sẽ re-render
+    console.log("Selected chat updated:", selectedChat);
+  }, [selectedChat]);
+
   const isAdmin = useMemo(() => {
     if (!selectedChat || !authUser || !authUser._id) return false;
     

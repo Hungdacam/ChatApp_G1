@@ -62,7 +62,17 @@ export const useChatStore = create((set, get) => ({
     
     // Tìm chat đầy đủ từ danh sách chats
     const fullChat = validChats.find(c => c.chatId === chat.chatId) || chat;
-    
+    axios.get(`/chat/${chat.chatId}`)
+    .then(response => {
+      if (response.data && response.data.chat) {
+        set({ selectedChat: response.data.chat });
+      } else {
+        set({ selectedChat: fullChat });
+      }
+    })
+    .catch(() => {
+      set({ selectedChat: fullChat });
+    });
     console.log("Selecting chat:", fullChat);
     console.log("createdBy:", fullChat.createdBy);
     console.log("admins:", fullChat.admins);
@@ -477,62 +487,71 @@ export const useChatStore = create((set, get) => ({
       const { chats, selectedChat } = get();
       
       // Nếu server trả về chat đầy đủ, sử dụng nó
-      let updatedChat;
       if (response.data.chat) {
-        updatedChat = {
+        const updatedChat = {
           ...response.data.chat,
           isGroupChat: true,
           chatId: chatId // Đảm bảo chatId luôn có
         };
-      } else {
-        // Nếu không, tự tạo updatedChat từ dữ liệu hiện có
-        const chatToUpdate = chats.find(chat => chat.chatId === chatId);
-        if (!chatToUpdate) {
-          throw new Error("Không tìm thấy chat với ID: " + chatId);
-        }
         
-        // Tìm thông tin người dùng được thêm vào
-        const user = await axios.get(`/user/${userId}`).then(res => res.data.user).catch(() => null);
+        // Cập nhật danh sách chats
+        const updatedChats = chats.map(chat =>
+          chat.chatId === chatId ? updatedChat : chat
+        );
         
-        const updatedParticipants = [...chatToUpdate.participants];
-        const userExists = updatedParticipants.some(p => {
-          if (typeof p === 'object' && p._id) {
-            return p._id.toString() === userId.toString();
-          }
-          return p.toString() === userId.toString();
+        set({
+          chats: updatedChats,
+          selectedChat: selectedChat?.chatId === chatId ? updatedChat : selectedChat,
+          isAddingMember: false
         });
         
-        if (!userExists) {
-          if (user) {
-            updatedParticipants.push({
-              _id: userId,
-              name: user.name,
-              avatar: user.avatar
-            });
-          } else {
-            updatedParticipants.push(userId);
-          }
-        }
-        
-        updatedChat = {
-          ...chatToUpdate,
-          participants: updatedParticipants,
-          isGroupChat: true,
-          updatedAt: new Date().toISOString()
-        };
+        return updatedChat;
       }
       
-      // Cập nhật danh sách chats
-      const updatedChats = chats.map(chat => 
-        chat.chatId === chatId ? updatedChat : chat
-      );
+      // Nếu không có chat đầy đủ, tự cập nhật
+      const chatToUpdate = chats.find(chat => chat.chatId === chatId);
+      if (!chatToUpdate) {
+        throw new Error("Không tìm thấy chat với ID: " + chatId);
+      }
+      
+      // Tìm thông tin người dùng được thêm vào
+      const user = await axios.get(`/user/${userId}`).then(res => res.data.user).catch(() => null);
+      
+      const updatedParticipants = [...chatToUpdate.participants];
+      const userExists = updatedParticipants.some(p => {
+        if (typeof p === 'object' && p._id) {
+          return p._id.toString() === userId.toString();
+        }
+        return p.toString() === userId.toString();
+      });
+      
+      if (!userExists) {
+        if (user) {
+          updatedParticipants.push({
+            _id: userId,
+            name: user.name,
+            avatar: user.avatar
+          });
+        } else {
+          updatedParticipants.push(userId);
+        }
+      }
+      
+      const updatedChat = {
+        ...chatToUpdate,
+        participants: updatedParticipants,
+        isGroupChat: true,
+        updatedAt: new Date().toISOString()
+      };
+      
+      
       
       set({
-        chats: updatedChats,
+        chats: updatedChat,
         selectedChat: selectedChat?.chatId === chatId ? updatedChat : selectedChat,
         isAddingMember: false
       });
-      
+      await get().refreshChatList(true);
       return updatedChat;
     } catch (error) {
       console.error("Lỗi khi thêm thành viên:", error);
@@ -543,8 +562,7 @@ export const useChatStore = create((set, get) => ({
       throw error;
     }
   },
-  
-  
+    
   removeGroupMember: async (chatId, userId) => {
     set({ isRemovingMember: true, error: null });
     try {
