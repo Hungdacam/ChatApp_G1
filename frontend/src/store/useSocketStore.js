@@ -229,13 +229,23 @@ export const useSocketStore = create((set) => ({
       console.log("Nhóm đã bị giải tán:", data);
       const chatStore = useChatStore.getState();
       const { chats, selectedChat } = chatStore;
+      
       // Xóa nhóm khỏi danh sách chat
       const updatedChats = chats.filter(chat => chat.chatId !== data.chatId);
-      chatStore.setState({
+      
+      // Hiển thị thông báo
+      toast.error(`Nhóm "${data.groupName}" đã bị giải tán bởi người tạo nhóm`);
+      
+      // Kiểm tra xem người dùng có đang ở trong đoạn chat bị giải tán không
+      const isInDissolvedChat = selectedChat?.chatId === data.chatId;
+      
+      // Cập nhật state
+      useChatStore.setState({
         chats: updatedChats,
-        selectedChat: selectedChat?.chatId === data.chatId ? null : selectedChat
+        selectedChat: isInDissolvedChat ? null : selectedChat
       });
     });
+    
     
     
     

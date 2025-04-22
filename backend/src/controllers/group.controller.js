@@ -255,6 +255,8 @@ exports.dissolveGroup = async (req, res) => {
         console.warn("Không thể xóa avatar nhóm trên Cloudinary:", error);
       }
     }
+     // Lấy thông tin người dùng để gửi kèm thông báo
+     const user = await User.findById(userId).select('name');
 
     await Message.deleteMany({ chatId });
     await Chat.deleteOne({ chatId });
@@ -267,6 +269,10 @@ exports.dissolveGroup = async (req, res) => {
         io.to(socketId).emit("group_dissolved", {
           chatId,
           groupName: chat.groupName,
+          dissolvedBy: {
+            _id: userId,
+            name: user.name
+          }
         });
       }
     });
