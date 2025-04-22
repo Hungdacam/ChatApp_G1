@@ -378,16 +378,19 @@ exports.updateGroupAvatar = async (req, res) => {
   try {
     const { chatId } = req.body;
     const userId = req.user._id;
-
+    
+    // Kiểm tra quyền admin
     const chat = await Chat.findOne({ chatId, admins: userId });
     if (!chat) {
       return res.status(403).json({ message: "Bạn không có quyền cập nhật avatar nhóm" });
     }
-
+    
+    // Kiểm tra file ảnh
     if (!req.files || !req.files.avatar || !req.files.avatar[0]) {
       return res.status(400).json({ message: "Không có hình ảnh được gửi" });
     }
-
+    
+    // Upload ảnh lên Cloudinary
     const result = await new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         {
@@ -406,8 +409,8 @@ exports.updateGroupAvatar = async (req, res) => {
       );
       uploadStream.end(req.files.avatar[0].buffer);
     });
-
     
+    // Xóa ảnh cũ nếu có
     if (chat.avatar && chat.avatar !== "https://via.placeholder.com/50") {
       const oldPublicId = chat.avatar.split("/").pop().split(".")[0];
       try {
@@ -416,28 +419,43 @@ exports.updateGroupAvatar = async (req, res) => {
         console.warn("Không thể xóa hình ảnh cũ trên Cloudinary:", error);
       }
     }
-
+    
+    // Cập nhật avatar trong database
     chat.avatar = result.secure_url;
     await chat.save();
-
+    
+    // Lấy thông tin đầy đủ của chat để trả về
+    const updatedChat = await Chat.findOne({ chatId })
+      .populate('participants', 'name avatar')
+      .populate('admins', 'name avatar')
+      .populate('createdBy', 'name avatar');
+    
+    // Thông báo cho tất cả thành viên trong nhóm
     const io = req.app.get("io");
     const onlineUsers = req.app.get("onlineUsers");
+    
     chat.participants.forEach((participantId) => {
       const socketId = onlineUsers.get(participantId.toString());
       if (socketId) {
         io.to(socketId).emit("group_avatar_updated", {
           chatId,
           avatar: result.secure_url,
+          chat: updatedChat
         });
       }
     });
-
-    res.status(200).json({ message: "Cập nhật avatar thành công", avatar: result.secure_url });
+    
+    res.status(200).json({ 
+      message: "Cập nhật avatar thành công", 
+      avatar: result.secure_url,
+      chat: updatedChat
+    });
   } catch (error) {
     console.error("Lỗi cập nhật avatar nhóm:", error);
     res.status(500).json({ message: "Lỗi server", error: error.message });
   }
 };
+
 
 exports.leaveGroup = async (req, res) => {
   try {
