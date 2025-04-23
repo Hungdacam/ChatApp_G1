@@ -931,6 +931,32 @@ export const useChatStore = create((set, get) => ({
       });
       throw error;
     }
-  }
-  
+  },
+  recallMessage: async (messageId) => {
+    try {
+      const response = await axios.post('/chat/recall', { messageId }, { withCredentials: true });
+      const { messages } = get();
+
+      // Cập nhật trạng thái tin nhắn đã thu hồi
+      const updatedMessages = messages.map((msg) =>
+        msg.messageId === messageId
+          ? {
+              ...msg,
+              isRecalled: true,
+              content: 'Tin nhắn đã được thu hồi',
+              image: null, // Xóa ảnh
+              video: null, // Xóa video
+              fileUrl: null, // Xóa file
+              fileName: null, // Xóa tên file
+            }
+          : msg
+      );
+
+      set({ messages: updatedMessages });
+      return response.data;
+    } catch (error) {
+      console.error('Lỗi khi thu hồi tin nhắn:', error);
+      throw error;
+    }
+  },
 }));

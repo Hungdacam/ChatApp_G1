@@ -508,6 +508,26 @@ socket.on("admin_assigned", (data) => {
     });
     
     
+    socket.on("message_recalled", (data) => {
+      console.log("Tin nhắn đã được thu hồi:", data);
+    
+      const { messages } = useChatStore.getState();
+      const updatedMessages = messages.map((msg) =>
+        msg.messageId === data.messageId
+          ? {
+              ...msg,
+              isRecalled: true,
+              content: "Tin nhắn đã được thu hồi",
+              image: null,
+              video: null,
+              fileUrl: null,
+              fileName: null,
+            }
+          : msg
+      );
+    
+      useChatStore.setState({ messages: updatedMessages });
+    });
     
     
     set({ socket });
