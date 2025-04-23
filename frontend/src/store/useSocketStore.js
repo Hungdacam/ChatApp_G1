@@ -1,4 +1,3 @@
-// useSocketStore.js
 import { io } from "socket.io-client";
 import { create } from "zustand";
 import { useChatStore } from "./useChatStore";
@@ -414,18 +413,33 @@ socket.on("admin_assigned", (data) => {
         console.error("Dữ liệu không hợp lệ từ sự kiện member_left_group:", data);
         return;
       }
-      
+    
       const chatStore = useChatStore.getState();
       const { chats, selectedChat } = chatStore;
-      
-      // Tìm chat trong danh sách hiện tại
+    
+      // Hiển thị thông báo cho người dùng
+      toast(`${data.userName} đã rời khỏi nhóm "${data.groupName}"`);
+    
+      // Nếu server gửi đầy đủ thông tin chat
+      if (data.chat) {
+        const updatedChats = chats.map(chat => 
+          chat.chatId === data.chatId ? {...data.chat, isGroupChat: true} : chat
+        );
+        
+        useChatStore.setState({
+          chats: updatedChats,
+          selectedChat: selectedChat?.chatId === data.chatId ? {...data.chat, isGroupChat: true} : selectedChat
+        });
+        return;
+      }
+    
+      // Nếu không có data.chat, sử dụng logic hiện tại
       const chatToUpdate = chats.find(chat => chat.chatId === data.chatId);
-      
       if (!chatToUpdate) {
         console.error("Không tìm thấy chat với ID:", data.chatId);
         return;
       }
-      
+    
       // Cập nhật danh sách participants
       const updatedChat = {
         ...chatToUpdate,
@@ -445,17 +459,18 @@ socket.on("admin_assigned", (data) => {
         createdBy: chatToUpdate.createdBy,
         updatedAt: new Date().toISOString()
       };
-      
+    
       // Cập nhật thông tin nhóm trong danh sách chat
       const updatedChats = chats.map(chat =>
         chat.chatId === data.chatId ? updatedChat : chat
       );
-      
-      chatStore.setState({
+    
+      useChatStore.setState({
         chats: updatedChats,
         selectedChat: selectedChat?.chatId === data.chatId ? updatedChat : selectedChat
       });
     });
+    
     
     
     socket.on("left_group", (data) => {

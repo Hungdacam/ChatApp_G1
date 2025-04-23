@@ -663,26 +663,29 @@ export const useChatStore = create((set, get) => ({
   leaveGroup: async (chatId) => {
     set({ isRemovingMember: true, error: null });
     try {
-      await axios.post("/group/leave", { chatId });
-      
-      // Xóa nhóm khỏi danh sách chat
-      const { chats, selectedChat } = get();
-      const updatedChats = chats.filter(chat => chat.chatId !== chatId);
-      
-      set({
-        chats: updatedChats,
-        selectedChat: selectedChat?.chatId === chatId ? null : selectedChat,
-        isRemovingMember: false
-      });
+        const response = await axios.post("/group/leave", { chatId });
+        
+        // Xóa nhóm khỏi danh sách chat
+        const { chats, selectedChat } = get();
+        const updatedChats = chats.filter(chat => chat.chatId !== chatId);
+        
+        set({
+            chats: updatedChats,
+            selectedChat: selectedChat?.chatId === chatId ? null : selectedChat,
+            isRemovingMember: false
+        });
+        
+        return response.data;
     } catch (error) {
-      console.error("Lỗi khi rời nhóm:", error);
-      set({
-        error: error.response?.data?.message || "Lỗi khi rời nhóm",
-        isRemovingMember: false
-      });
-      throw error;
+        console.error("Lỗi khi rời nhóm:", error);
+        set({
+            error: error.response?.data?.message || "Lỗi khi rời nhóm",
+            isRemovingMember: false
+        });
+        throw error;
     }
-  },
+},
+
   
   assignAdmin: async (chatId, userId) => {
     set({ error: null });

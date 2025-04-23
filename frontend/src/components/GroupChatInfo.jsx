@@ -175,23 +175,54 @@ const GroupChatInfo = ({ onClose }) => {
   
   
   const handleCheckBeforeLeave = () => {
-    // Nếu người dùng hiện tại là admin
-    if (isAdmin) {
-      // Đếm số lượng admin trong nhóm
-      const adminCount = selectedChat.admins?.length || 0;
-      
-      // Kiểm tra xem người dùng hiện tại có phải là admin duy nhất không
-      const isLastAdmin = adminCount <= 1;
-      
-      if (isLastAdmin) {
-        toast.error('Bạn là admin duy nhất của nhóm. Vui lòng gán quyền admin cho người khác trước khi rời nhóm.');
-        return;
-      }
+    // Kiểm tra nếu người dùng là người tạo nhóm
+    if (isCreator) {
+        // Đếm số lượng admin khác
+        const otherAdmins = selectedChat.admins?.filter(adminId => {
+            if (typeof adminId === 'object' && adminId._id) {
+                return adminId._id.toString() !== authUser._id.toString();
+            }
+            return adminId.toString() !== authUser._id.toString();
+        }).length || 0;
+        
+        if (otherAdmins === 0) {
+            toast.error('Bạn là người tạo nhóm và là admin duy nhất. Vui lòng gán quyền admin cho người khác trước khi rời nhóm.');
+            return;
+        }
+    } 
+    // Nếu người dùng là admin thường (không phải người tạo)
+    else if (isAdmin) {
+        // Kiểm tra xem người tạo nhóm còn trong nhóm không
+        let creatorId = selectedChat.createdBy;
+        if (typeof creatorId === 'object' && creatorId._id) {
+            creatorId = creatorId._id.toString();
+        } else {
+            creatorId = creatorId.toString();
+        }
+        
+        const creatorStillInGroup = selectedChat.participants.some(p => {
+            if (typeof p === 'object' && p._id) {
+                return p._id.toString() === creatorId;
+            }
+            return p.toString() === creatorId;
+        });
+        
+        // Nếu người tạo nhóm không còn trong nhóm, kiểm tra xem có phải admin cuối cùng không
+        if (!creatorStillInGroup) {
+            const adminCount = selectedChat.admins?.length || 0;
+            const isLastAdmin = adminCount <= 1;
+            if (isLastAdmin) {
+                toast.error('Bạn là admin cuối cùng của nhóm và người tạo nhóm không còn trong nhóm. Vui lòng gán quyền admin cho người khác trước khi rời nhóm.');
+                return;
+            }
+        }
+        // Nếu người tạo nhóm vẫn còn trong nhóm, admin có thể rời đi
     }
     
     // Nếu không phải admin hoặc có nhiều admin, cho phép rời nhóm
     setConfirmAction({ type: 'leave' });
-  };
+};
+
   
   
   const handleLeaveGroup = async () => {

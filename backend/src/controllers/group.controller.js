@@ -108,16 +108,25 @@ exports.addGroupMember = async (req, res) => {
       return res.status(404).json({ message: "Nhóm không tồn tại" });
     }
     
-    if (!chat.admins.includes(adminId)) {
-      return res.status(403).json({ message: "Chỉ admin mới có thể thực hiện thêm" });
-    }
+    const isCreator = chat.createdBy.toString();
+        const isAdmin = chat.admins.includes(adminId);
+        
+        if (!isAdmin && !isCreator) {
+            return res.status(403).json({ message: "Bạn không có quyền thêm thành viên vào nhóm này" });
+        }
     
-    const user = await User.findById(userId);
+    // Tìm thông tin người dùng đầy đủ
+    const user = await User.findById(userId).select('name avatar');
     if (!user) {
       return res.status(400).json({ message: "Người dùng không tồn tại" });
     }
     
-    if (chat.participants.includes(userId)) {
+    // Kiểm tra xem người dùng đã tồn tại trong nhóm chưa
+    const userExists = chat.participants.some(p => {
+      return p.toString() === userId.toString();
+    });
+    
+    if (userExists) {
       return res.status(400).json({ message: "Thành viên đã tồn tại trong nhóm" });
     }
     
@@ -142,6 +151,11 @@ exports.addGroupMember = async (req, res) => {
           userId,
           userName: user.name,
           userAvatar: user.avatar,
+          userInfo: {
+            _id: user._id,
+            name: user.name,
+            avatar: user.avatar
+          },
           chat: updatedChat // Gửi đầy đủ thông tin chat
         });
       }
@@ -487,43 +501,73 @@ exports.updateGroupAvatar = async (req, res) => {
 
 exports.leaveGroup = async (req, res) => {
   try {
-    const { chatId } = req.body;
-    const userId = req.user._id;
+      const { chatId } = req.body;
+      const userId = req.user._id;
+      const user = await User.findById(userId).select('name avatar');
+      
+      // Tìm nhóm chat
+      const chat = await Chat.findOne({ chatId, isGroupChat: true });
+      if (!chat) {
+          return res.status(404).json({ message: "Nhóm không tồn tại" });
+      }
+      
+      // Kiểm tra xem người dùng có phải là thành viên của nhóm không
+      if (!chat.participants.includes(userId)) {
+          return res.status(400).json({ message: "Bạn không phải là thành viên của nhóm này" });
+      }
+      
+      // Kiểm tra nếu người dùng là người tạo nhóm
+      const isCreator = chat.createdBy.toString() === userId.toString();
+      const isAdmin = chat.admins.includes(userId);
+      
+      // Nếu là người tạo nhóm, kiểm tra xem có admin khác không
+      if (isCreator) {
+          const otherAdmins = chat.admins.filter(adminId => 
+              adminId.toString() !== userId.toString()
+          );
+          
+          if (otherAdmins.length === 0) {
+              return res.status(400).json({
+                  message: "Bạn là người tạo nhóm và là admin duy nhất. Vui lòng gán quyền admin cho người khác trước khi rời nhóm hoặc chọn giải tán nhóm."
+              });
+          }
+      } 
+      // Nếu là admin thường (không phải người tạo), kiểm tra xem người tạo nhóm còn trong nhóm không
+      else if (isAdmin) {
+          const creatorStillInGroup = chat.participants.some(participantId => 
+              participantId.toString() === chat.createdBy.toString()
+          );
+          
+          // Nếu người tạo nhóm không còn trong nhóm và là admin cuối cùng
+          if (!creatorStillInGroup) {
+              const remainingAdmins = chat.admins.filter(adminId =>
+                  adminId.toString() !== userId.toString()
+              );
+              
+              if (remainingAdmins.length === 0) {
+                  return res.status(400).json({
+                      message: "Bạn là admin cuối cùng của nhóm và người tạo nhóm không còn trong nhóm. Vui lòng gán quyền admin cho người khác trước khi rời nhóm."
+                  });
+              }
+          }
+          // Nếu người tạo nhóm vẫn còn trong nhóm, admin có thể rời đi
+      }
+      
+      // Xóa người dùng khỏi danh sách thành viên và admin
+      chat.participants = chat.participants.filter(id => id.toString() !== userId.toString());
+      chat.admins = chat.admins.filter(id => id.toString() !== userId.toString());
+      
+      await chat.save();
     
-    // Tìm nhóm chat
-    const chat = await Chat.findOne({ chatId, isGroupChat: true });
-    
-    if (!chat) {
-      return res.status(404).json({ message: "Nhóm không tồn tại" });
-    }
-    
-    // Kiểm tra xem người dùng có phải là thành viên của nhóm không
-    if (!chat.participants.includes(userId)) {
-      return res.status(400).json({ message: "Bạn không phải là thành viên của nhóm này" });
-    }
-    
-    // Kiểm tra xem người dùng có phải là người tạo nhóm không
-    if (chat.createdBy.toString() === userId.toString()) {
-      return res.status(400).json({ 
-        message: "Người tạo nhóm không thể rời nhóm. Vui lòng chọn giải tán nhóm hoặc chuyển quyền sở hữu nhóm cho người khác" 
-      });
-    }
-    
-    // Xóa người dùng khỏi danh sách thành viên
-    chat.participants = chat.participants.filter(
-      (id) => id.toString() !== userId.toString()
-    );
-    
-    // Xóa người dùng khỏi danh sách admin nếu họ là admin
-    chat.admins = chat.admins.filter(
-      (id) => id.toString() !== userId.toString()
-    );
-    
-    await chat.save();
-    
+    // Lấy thông tin đầy đủ của chat để gửi về
+    const updatedChat = await Chat.findOne({ chatId })
+    .populate('participants', 'name avatar')
+    .populate('admins', 'name avatar')
+    .populate('createdBy', 'name avatar');
     // Thông báo cho tất cả thành viên còn lại trong nhóm
     const io = req.app.get("io");
     const onlineUsers = req.app.get("onlineUsers");
+    
     
     // Thông báo cho các thành viên còn lại trong nhóm
     chat.participants.forEach((participantId) => {
@@ -532,11 +576,13 @@ exports.leaveGroup = async (req, res) => {
         io.to(socketId).emit("member_left_group", {
           chatId,
           userId,
-          groupName: chat.groupName
+          userName: user.name,
+          groupName: chat.groupName,
+          chat: updatedChat // Thêm thông tin chat đầy đủ
         });
       }
     });
-    
+
     // Thông báo cho người rời nhóm
     const userSocketId = onlineUsers.get(userId.toString());
     if (userSocketId) {
@@ -545,10 +591,11 @@ exports.leaveGroup = async (req, res) => {
         groupName: chat.groupName
       });
     }
-    
+
     res.status(200).json({ message: "Đã rời khỏi nhóm thành công" });
   } catch (error) {
     console.error("Lỗi rời nhóm:", error);
     res.status(500).json({ message: "Lỗi server", error: error.message });
   }
 };
+
