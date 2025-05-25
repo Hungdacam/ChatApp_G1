@@ -147,7 +147,6 @@ const GroupChatInfo = ({ onClose }) => {
       console.log("Chat hiện tại:", selectedChat);
       // Kiểm tra xem có phải người tạo nhóm không
       // Kiểm tra xem người bị xóa quyền có phải là người tạo nhóm không
-      // Kiểm tra xem người bị xóa quyền có phải là người tạo nhóm không
       let isUserCreator = false;
       if (selectedChat.createdBy) {
         if (typeof selectedChat.createdBy === 'object' && selectedChat.createdBy._id) {

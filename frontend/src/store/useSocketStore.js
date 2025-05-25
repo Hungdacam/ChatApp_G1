@@ -460,7 +460,6 @@ socket.on("call_ended", (data) => {
 });
 
 
-// Thêm vào phần connectSocket
 socket.on("call_rejected", (data) => {
   console.log("📞 Cuộc gọi bị từ chối:", data);
   const { callId, message } = data;
@@ -481,6 +480,26 @@ socket.on("call_rejected", (data) => {
   }
 });
  
+// Thêm xử lý thông báo group call đến
+socket.on("incoming_group_call", (data) => {
+  console.log("🔔 Group call đến:", data);
+  const { callId, caller, groupName, chatId, isGroupCall } = data;
+  
+  // Hiển thị thông báo group call đến
+  try {
+    const callStore = useCallStore.getState();
+    callStore.setIncomingCall({
+      callId,
+      caller,
+      isGroupCall: true,
+      groupName,
+      chatId,
+      isActive: true
+    });
+  } catch (error) {
+    console.error("Lỗi khi xử lý group call đến:", error);
+  }
+});
 
     
     socket.on("member_left_group", (data) => {

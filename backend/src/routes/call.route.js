@@ -13,6 +13,9 @@ router.get('/token', streamController.generateStreamToken);
 // Tạo cuộc gọi mới
 router.post('/call', streamController.createCall);
 
+// Tạo group call
+router.post('/group-call', streamController.createGroupCall);
+
 // Kết thúc cuộc gọi
 router.put('/call/:callId/end', streamController.endCall);
 

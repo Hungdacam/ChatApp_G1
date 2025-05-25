@@ -58,7 +58,43 @@ const useCallStore = create((set, get) => ({
     }
   },
   
-  // Tạo cuộc gọi mới
+
+createGroupCall: async (chatId, callType = 'video') => {
+  set({ isLoading: true });
+  try {
+    const response = await axiosInstance.post('/stream/group-call', {
+      chatId,
+      callType
+    });
+    
+    // Gửi thông báo group call qua socket
+    const socket = window.socketInstance;
+    if (socket) {
+      console.log("🔔 Gửi sự kiện start_group_call với dữ liệu:", {
+        callId: response.data.callId,
+        chatId,
+        callerId: localStorage.getItem("userId"),
+        isGroupCall: true
+      });
+      socket.emit("start_group_call", {
+        callId: response.data.callId,
+        chatId,
+        callerId: localStorage.getItem("userId"),
+        isGroupCall: true
+      });
+    }
+    
+    set({ callId: response.data.callId, isLoading: false });
+    return response.data.callId;
+  } catch (error) {
+    console.error('Error creating group call:', error);
+    set({ error: 'Không thể tạo group call', isLoading: false });
+    toast.error('Không thể tạo group call');
+    return null;
+  }
+},
+
+    // Tạo cuộc gọi mới
  createCall: async (participantIds, chatId, callerId) => {
   set({ isLoading: true });
   try {

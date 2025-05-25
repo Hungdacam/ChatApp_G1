@@ -2,6 +2,7 @@
 const StreamCall = require('../models/call.model');
 const User = require('../models/user.model');
 const { StreamChat } = require('stream-chat');
+const Chat = require('../models/chat.model'); 
 const { StreamClient } = require('@stream-io/node-sdk');
 const crypto = require('crypto');
 
@@ -21,6 +22,52 @@ const generateStreamToken = async (req, res) => {
   } catch (error) {
     console.error('Error generating Stream token:', error);
     res.status(500).json({ message: 'Không thể tạo Stream token' });
+  }
+};
+
+// Thêm hàm mới để tạo group call
+const createGroupCall = async (req, res) => {
+  try {
+    const { chatId, callType = 'video' } = req.body;
+    const initiatorId = req.user._id;
+    
+    // Kiểm tra group chat có tồn tại không
+    const chat = await Chat.findOne({ chatId, isGroupChat: true });
+    if (!chat) {
+      return res.status(404).json({ message: 'Group chat không tồn tại' });
+    }
+    
+    // Kiểm tra người gọi có phải là thành viên của group không
+    if (!chat.participants.includes(initiatorId)) {
+      return res.status(403).json({ message: 'Bạn không có quyền tạo cuộc gọi trong group này' });
+    }
+    
+    // Tạo ID cuộc gọi ngẫu nhiên
+    const callId = crypto.randomBytes(16).toString('hex');
+    
+    // Tạo bản ghi cuộc gọi mới
+    const newCall = new StreamCall({
+      callId,
+      initiator: initiatorId,
+      participants: chat.participants,
+      chatId,
+      callType,
+      isGroupCall: true
+    });
+    
+    await newCall.save();
+    
+    res.status(201).json({
+      callId,
+      callType,
+      isGroupCall: true,
+      participants: chat.participants,
+      groupName: chat.groupName,
+      message: 'Group call đã được tạo thành công'
+    });
+  } catch (error) {
+    console.error('Error creating group call:', error);
+    res.status(500).json({ message: 'Không thể tạo group call' });
   }
 };
 
@@ -100,5 +147,6 @@ module.exports = {
   generateStreamToken,
   createCall,
   endCall,
-  getCallHistory
+  getCallHistory,
+  createGroupCall
 };

@@ -20,6 +20,15 @@ const streamCallSchema = new mongoose.Schema({
     enum: ['active', 'ended', 'missed'],
     default: 'active'
   },
+  callType: {
+    type: String,
+    enum: ['video', 'audio'],
+    default: 'video'
+  },
+  isGroupCall: {
+    type: Boolean,
+    default: false
+  },
   startTime: {
     type: Date,
     default: Date.now

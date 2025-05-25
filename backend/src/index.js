@@ -117,7 +117,6 @@ io.on('connection', (socket) => {
   }
 });
 // Xử lý khi người dùng kết thúc cuộc gọi
-// Xử lý khi người dùng kết thúc cuộc gọi
 socket.on("end_call", (data) => {
   console.log("📞 Nhận sự kiện end_call:", data);
   const { callId } = data;
@@ -151,7 +150,6 @@ socket.on("end_call", (data) => {
 socket.on("reject_call", (data) => {
   console.log("📞 Nhận sự kiện reject_call:", data);
   const { callId, callerId } = data;
-  
   // Thông báo cho người gọi
   if (callerId) {
     const callerSocketId = findUserSocket(callerId);
@@ -177,6 +175,50 @@ socket.on("reject_call", (data) => {
     })
     .catch(err => console.error("Lỗi khi cập nhật trạng thái cuộc gọi:", err));
 }); 
+
+// Thêm event cho group call - THÊM SAU dòng 161
+socket.on("start_group_call", async (data) => {
+  console.log("📞 Nhận sự kiện start_group_call:", data);
+  const { callId, chatId, callerId, isGroupCall } = data;
+  
+  try {
+    const User = require('./models/user.model');
+    const Chat = require('./models/chat.model');
+    
+    const callerUser = await User.findById(callerId);
+    const chat = await Chat.findOne({ chatId, isGroupChat: true });
+    
+    if (!chat) {
+      console.log("❌ Không tìm thấy group chat");
+      return;
+    }
+    
+    const caller = {
+      _id: callerId,
+      name: callerUser?.name || "Người dùng",
+      avatar: callerUser?.avatar || "/avatar.png"
+    };
+    
+    // Gửi thông báo đến tất cả thành viên trong group (trừ người gọi)
+    chat.participants.forEach(userId => {
+      if (userId.toString() !== callerId) {
+        const targetSocketId = findUserSocket(userId.toString());
+        if (targetSocketId) {
+          console.log(`📲 Gửi thông báo group call đến user ${userId}`);
+          io.to(targetSocketId).emit("incoming_group_call", {
+            callId,
+            caller,
+            groupName: chat.groupName,
+            chatId,
+            isGroupCall: true
+          });
+        }
+      }
+    });
+  } catch (error) {
+    console.error("Lỗi khi xử lý group call:", error);
+  }
+});
 
 
 function findUserSocket(userId) {

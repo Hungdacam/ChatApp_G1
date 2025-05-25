@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useCallStore from '../store/useCallStore';
-import { Phone, PhoneOff } from 'lucide-react';
+import { Phone, PhoneOff, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const IncomingCallNotification = () => {
@@ -21,24 +21,24 @@ const IncomingCallNotification = () => {
     };
   }, [navigate]);
   
-// Thêm hiệu ứng khi từ chối cuộc gọi
-const handleRejectCall = () => {
-  console.log('Reject button clicked');
-  
-  try {
-    // Gọi hàm từ chối trước khi hiển thị thông báo
-    if (typeof rejectIncomingCall === 'function') {
-      rejectIncomingCall();
-      // Hiển thị thông báo sau khi đã xử lý từ chối
-      toast("Đã từ chối cuộc gọi");
-    } else {
-      console.error('rejectIncomingCall is not a function');
+  // Thêm hiệu ứng khi từ chối cuộc gọi
+  const handleRejectCall = () => {
+    console.log('Reject button clicked');
+    
+    try {
+      // Gọi hàm từ chối trước khi hiển thị thông báo
+      if (typeof rejectIncomingCall === 'function') {
+        rejectIncomingCall();
+        // Hiển thị thông báo phù hợp với loại cuộc gọi
+        const callType = incomingCall?.isGroupCall ? 'group call' : 'cuộc gọi';
+        toast(`Đã từ chối ${callType}`);
+      } else {
+        console.error('rejectIncomingCall is not a function');
+      }
+    } catch (error) {
+      console.error('Error rejecting call:', error);
     }
-  } catch (error) {
-    console.error('Error rejecting call:', error);
-  }
-};
-
+  };
 
   if (!incomingCall) return null;
   
@@ -47,26 +47,56 @@ const handleRejectCall = () => {
       <div className="bg-white rounded-lg p-6 max-w-md w-full">
         <div className="text-center mb-6">
           <div className="w-20 h-20 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-4">
-            <img 
-              src={incomingCall.caller?.avatar} 
-              alt="Caller" 
-              className="w-16 h-16 rounded-full object-cover"
-            />
+            {/* Hiển thị icon khác nhau cho group call và 1:1 call */}
+            {incomingCall.isGroupCall ? (
+              <Users size={32} className="text-blue-600" />
+            ) : (
+              <img 
+                src={incomingCall.caller?.avatar || "/avatar.png"} 
+                alt="Caller" 
+                className="w-16 h-16 rounded-full object-cover"
+              />
+            )}
           </div>
-          <h3 className="text-xl font-semibold">{incomingCall.caller?.name}</h3>
-          <p className="text-gray-600">đang gọi cho bạn...</p>
+          
+          {/* Hiển thị thông tin khác nhau cho group call và 1:1 call */}
+          {incomingCall.isGroupCall ? (
+            <>
+              <h3 className="text-xl font-semibold">
+                {incomingCall.groupName || "Group Chat"}
+              </h3>
+              <p className="text-gray-600">
+                {incomingCall.caller?.name || "Người dùng"} đang mời bạn tham gia group call
+              </p>
+              <p className="text-sm text-gray-500 mt-1">
+                Video call nhóm
+              </p>
+            </>
+          ) : (
+            <>
+              <h3 className="text-xl font-semibold">
+                {incomingCall.caller?.name || "Người dùng"}
+              </h3>
+              <p className="text-gray-600">đang gọi cho bạn...</p>
+              <p className="text-sm text-gray-500 mt-1">
+                Video call 1:1
+              </p>
+            </>
+          )}
         </div>
         
         <div className="flex justify-center gap-6">
           <button 
             onClick={handleRejectCall}
-            className="w-14 h-14 rounded-full bg-red-500 text-white flex items-center justify-center"
+            className="w-14 h-14 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 transition-colors"
+            title={incomingCall.isGroupCall ? "Từ chối group call" : "Từ chối cuộc gọi"}
           >
             <PhoneOff size={24} />
           </button>
           <button 
             onClick={acceptIncomingCall}
-            className="w-14 h-14 rounded-full bg-green-500 text-white flex items-center justify-center"
+            className="w-14 h-14 rounded-full bg-green-500 text-white flex items-center justify-center hover:bg-green-600 transition-colors"
+            title={incomingCall.isGroupCall ? "Tham gia group call" : "Chấp nhận cuộc gọi"}
           >
             <Phone size={24} />
           </button>
