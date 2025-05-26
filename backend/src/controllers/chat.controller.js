@@ -12,20 +12,29 @@ exports.sendMessage = async (req, res) => {
     const { chatId, content, receiverId } = req.body;
     let imageUrl = null;
     let videoUrl = null;
+    let fileUrl = null;
+    let fileName = null;
 
     console.log("Request body:", req.body);
     console.log("Request files:", req.files);
 
+    // Kiểm tra xác thực và dữ liệu đầu vào
     if (!senderId) return res.status(401).json({ message: "Vui lòng đăng nhập lại." });
     if (!chatId) return res.status(400).json({ message: "Thiếu chatId." });
-    if ((!content || content.trim() === "") && !req.files?.image && !req.files?.video) {
-      return res.status(400).json({ message: "Tin nhắn hoặc tệp không được để trống." });
+    if (
+      (!content || content.trim() === "") &&
+      !req.files?.image &&
+      !req.files?.video &&
+      !req.files?.file
+    ) {
+      return res.status(400).json({ message: "Tin nhắn, tệp, hình ảnh hoặc video không được để trống." });
     }
 
+    // Kiểm tra chat tồn tại
     let chat = await Chat.findOne({ chatId });
     if (!chat) return res.status(404).json({ message: "Chat không tồn tại." });
 
-    // Xử lý ảnh
+    // Xử lý ảnh (Cloudinary)
     if (req.files && req.files.image) {
       try {
         const uploadResponse = await cloudinary.uploader.upload(
@@ -40,7 +49,7 @@ exports.sendMessage = async (req, res) => {
       }
     }
 
-    // Xử lý video
+    // Xử lý video (Cloudinary)
     if (req.files && req.files.video) {
       try {
         const uploadRes = await cloudinary.uploader.upload(
@@ -55,8 +64,38 @@ exports.sendMessage = async (req, res) => {
       }
     }
 
-    const contentToSave = content && content.trim() !== "" ? content : (videoUrl ? "[Video]" : imageUrl ? "[Image]" : "");
+    // Xử lý tệp (AWS S3)
+    if (req.files && req.files.file) {
+      try {
+        const fileId = uuidv4();
+        fileName = req.files.file[0].originalname;
+        const fileKey = `chat-files/${fileId}-${fileName}`;
 
+        const params = {
+          Bucket: "app-chat-cnm",
+          Key: fileKey,
+          Body: req.files.file[0].buffer,
+          ContentType: req.files.file[0].mimetype,
+        };
+
+        const uploadResult = await s3.upload(params).promise();
+        fileUrl = uploadResult.Location;
+        console.log("File uploaded to S3:", fileUrl);
+      } catch (uploadError) {
+        console.error("Lỗi tải tệp:", uploadError);
+        return res.status(500).json({ message: "Lỗi tải tệp lên AWS S3." });
+      }
+    }
+
+    // Xác định nội dung tin nhắn
+    const contentToSave = content && content.trim() !== ""
+      ? content
+      : (videoUrl ? "[Video]"
+        : imageUrl ? "[Image]"
+        : fileUrl ? fileName
+        : "");
+
+    // Tạo và lưu tin nhắn
     const messageId = uuidv4();
     const message = new Message({
       messageId,
@@ -65,20 +104,28 @@ exports.sendMessage = async (req, res) => {
       content: contentToSave,
       image: imageUrl,
       video: videoUrl,
+      fileUrl,
+      fileName,
+      isDelivered: false,
+      isRead: false,
+      createdAt: new Date(),
     });
 
     await message.save();
     console.log("Saved message:", message);
 
+    // Cập nhật thời gian chat
     chat.updatedAt = new Date();
     await chat.save();
 
+    // Phát sự kiện new_message
     const io = req.app.get("io");
     const onlineUsers = req.app.get("onlineUsers");
     const populatedMessage = await Message.findOne({ messageId }).populate("senderId", "name avatar");
 
     emitNewMessage(chat, populatedMessage, io, onlineUsers);
 
+    // Phản hồi
     res.status(201).json({ message: "Đã gửi tin nhắn", messageId });
   } catch (error) {
     console.error("Lỗi gửi tin nhắn:", error);
@@ -255,58 +302,7 @@ exports.recallMessage = async (req, res) => {
   }
 };
 
-exports.sendFile = async (req, res) => {
-  try {
-    const { chatId, receiverId } = req.body;
 
-    console.log("Request body:", req.body); 
-    console.log("Request file:", req.file); 
-
-    if (!req.user || !req.user._id) {
-      return res.status(401).json({ message: "Không tìm thấy người dùng. Vui lòng đăng nhập lại." });
-    }
-
-    if (!req.file) {
-      return res.status(400).json({ message: "Vui lòng gửi một tệp." });
-    }
-
-    const fileId = uuidv4();
-    const fileName = req.file.originalname;
-    const fileKey = `chat-files/${fileId}-${fileName}`;
-
-    const params = {
-      Bucket: "app-chat-cnm",
-      Key: fileKey,
-      Body: req.file.buffer,
-      ContentType: req.file.mimetype,
-    };
-
-    const uploadResult = await s3.upload(params).promise();
-    console.log("File uploaded to S3:", uploadResult.Location); 
-
-    const newMessage = new Message({
-      messageId: uuidv4(),
-      chatId,
-      senderId: req.user._id,
-      content: fileName,
-      fileUrl: uploadResult.Location,
-      fileName,
-      isDelivered: false,
-      isRead: false,
-      createdAt: new Date(),
-    });
-
-    await newMessage.save();
-    console.log("Saved message:", newMessage); 
-
-    req.app.get("io").to(chatId).emit("new_message", { message: newMessage });
-
-    res.status(200).json(newMessage);
-  } catch (error) {
-    console.error("Lỗi gửi tệp:", error);
-    res.status(500).json({ message: "Không thể gửi tệp." });
-  }
-};
 
 exports.getChatDetails = async (req, res) => {
   try {

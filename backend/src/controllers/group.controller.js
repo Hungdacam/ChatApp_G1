@@ -67,31 +67,20 @@ exports.createGroup = async (req, res) => {
 
     const io = req.app.get("io");
     const onlineUsers = req.app.get("onlineUsers");
-
-    const fullChat = await Chat.findOne({ chatId })
-      .populate('participants', 'name avatar')
-      .populate('admins', 'name avatar')
-      .populate('createdBy', 'name avatar');
     
-      participants.forEach((userId) => {
-        const socketId = onlineUsers.get(userId.toString());
-        if (socketId) {
-          io.to(socketId).emit("new_group_created", {
-            chat: fullChat, // Gửi đầy đủ thông tin chat
-            chatId,
-            groupName,
-            participants,
-            avatar,
-          });
-        }
-      });
+    participants.forEach((userId) => {
+      const socketId = onlineUsers.get(userId.toString());
+      if (socketId) {
+        io.to(socketId).emit("new_group_created", {
+          chatId,
+          groupName,
+          participants,
+          avatar,
+        });
+      }
+    });
 
-      res.status(201).json({ 
-        message: "Tạo nhóm thành công", 
-        chatId, 
-        avatar,
-        chat: fullChat // Trả về đầy đủ thông tin chat
-      });
+    res.status(201).json({ message: "Tạo nhóm thành công", chatId, avatar });
   } catch (error) {
     console.error("Lỗi tạo nhóm:", error);
     res.status(500).json({ message: "Lỗi server", error: error.message });
@@ -108,25 +97,16 @@ exports.addGroupMember = async (req, res) => {
       return res.status(404).json({ message: "Nhóm không tồn tại" });
     }
     
-    const isCreator = chat.createdBy.toString();
-        const isAdmin = chat.admins.includes(adminId);
-        
-        if (!isAdmin && !isCreator) {
-            return res.status(403).json({ message: "Bạn không có quyền thêm thành viên vào nhóm này" });
-        }
+    if (!chat.admins.includes(adminId)) {
+      return res.status(403).json({ message: "Chỉ admin mới có thể thực hiện thêm" });
+    }
     
-    // Tìm thông tin người dùng đầy đủ
-    const user = await User.findById(userId).select('name avatar');
+    const user = await User.findById(userId);
     if (!user) {
       return res.status(400).json({ message: "Người dùng không tồn tại" });
     }
     
-    // Kiểm tra xem người dùng đã tồn tại trong nhóm chưa
-    const userExists = chat.participants.some(p => {
-      return p.toString() === userId.toString();
-    });
-    
-    if (userExists) {
+    if (chat.participants.includes(userId)) {
       return res.status(400).json({ message: "Thành viên đã tồn tại trong nhóm" });
     }
     
@@ -142,7 +122,6 @@ exports.addGroupMember = async (req, res) => {
     const io = req.app.get("io");
     const onlineUsers = req.app.get("onlineUsers");
     
-    // Thông báo cho tất cả thành viên hiện tại (trừ thành viên mới)
     chat.participants.forEach((participantId) => {
       const socketId = onlineUsers.get(participantId.toString());
       if (socketId) {
@@ -150,26 +129,11 @@ exports.addGroupMember = async (req, res) => {
           chatId,
           userId,
           userName: user.name,
-          userAvatar: user.avatar,
-          userInfo: {
-            _id: user._id,
-            name: user.name,
-            avatar: user.avatar
-          },
-          chat: updatedChat // Gửi đầy đủ thông tin chat
+          chat: updatedChat // Thêm đối tượng chat đầy đủ
         });
       }
     });
-    const newMemberSocketId = onlineUsers.get(userId.toString());
-    if (newMemberSocketId) {
-      io.to(newMemberSocketId).emit("new_group_created", {
-        chatId,
-        groupName: chat.groupName,
-        participants: updatedChat.participants,
-        avatar: chat.avatar,
-        chat: updatedChat
-      });
-    }
+    
     res.status(200).json({ 
       message: "Thêm thành viên mới thành công",
       chat: updatedChat
@@ -184,50 +148,59 @@ exports.addGroupMember = async (req, res) => {
 exports.removeGroupMember = async (req, res) => {
   try {
     const { chatId, userId } = req.body;
-    const adminId = req.user._id;
-    
+    const currentUserId = req.user._id;
+
     const chat = await Chat.findOne({ chatId, isGroupChat: true });
     if (!chat) {
       return res.status(404).json({ message: "Không tồn tại nhóm" });
     }
-    
-    if (!chat.admins.includes(adminId)) {
-      return res.status(403).json({ message: "Chỉ admin mới có thể xóa thành viên" });
+
+    const isOwner = chat.createdBy.toString() === currentUserId.toString();
+    const isAdmin = chat.admins.map(id => id.toString()).includes(currentUserId.toString());
+
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ message: "Chỉ trưởng nhóm hoặc phó nhóm mới có thể xóa thành viên" });
     }
+
     
-    if (userId.toString() === adminId.toString()) {
+    if (userId.toString() === currentUserId.toString()) {
       return res.status(400).json({ message: "Không thể tự xóa chính mình" });
     }
+
     
-    if (!chat.participants.includes(userId)) {
+    if (userId.toString() === chat.createdBy.toString() && !isOwner) {
+      return res.status(403).json({ message: "Không thể xóa trưởng nhóm" });
+    }
+
+    if (!chat.participants.map(id => id.toString()).includes(userId.toString())) {
       return res.status(400).json({ message: "Không tồn tại người dùng trong nhóm" });
     }
-    
-    chat.participants = chat.participants.filter((id) => id.toString() !== userId.toString());
-    chat.admins = chat.admins.filter((id) => id.toString() !== userId.toString());
+
+    // Xoá user khỏi participants và admins
+    chat.participants = chat.participants.filter(id => id.toString() !== userId.toString());
+    chat.admins = chat.admins.filter(id => id.toString() !== userId.toString());
     await chat.save();
-    
-    // Lấy thông tin đầy đủ của chat để trả về
+
     const updatedChat = await Chat.findOne({ chatId })
       .populate('participants', 'name avatar')
       .populate('admins', 'name avatar')
       .populate('createdBy', 'name avatar');
-    
+
+    // Gửi sự kiện qua socket
     const io = req.app.get("io");
     const onlineUsers = req.app.get("onlineUsers");
-    
-    // Gửi sự kiện với đầy đủ thông tin chat
-    chat.participants.forEach((participantId) => {
+
+    chat.participants.forEach(participantId => {
       const socketId = onlineUsers.get(participantId.toString());
       if (socketId) {
         io.to(socketId).emit("group_member_removed", {
           chatId,
           userId,
-          chat: updatedChat // Gửi đầy đủ thông tin chat
+          chat: updatedChat
         });
       }
     });
-    
+
     const userSocketId = onlineUsers.get(userId.toString());
     if (userSocketId) {
       io.to(userSocketId).emit("removed_from_group", {
@@ -235,8 +208,8 @@ exports.removeGroupMember = async (req, res) => {
         groupName: chat.groupName,
       });
     }
-    
-    res.status(200).json({ 
+
+    res.status(200).json({
       message: "Đã xóa thành viên khỏi nhóm",
       chat: updatedChat
     });
@@ -245,7 +218,6 @@ exports.removeGroupMember = async (req, res) => {
     res.status(500).json({ message: "Lỗi server", error: error.message });
   }
 };
-
 
 exports.dissolveGroup = async (req, res) => {
   try {
@@ -269,8 +241,6 @@ exports.dissolveGroup = async (req, res) => {
         console.warn("Không thể xóa avatar nhóm trên Cloudinary:", error);
       }
     }
-     // Lấy thông tin người dùng để gửi kèm thông báo
-     const user = await User.findById(userId).select('name');
 
     await Message.deleteMany({ chatId });
     await Chat.deleteOne({ chatId });
@@ -283,10 +253,6 @@ exports.dissolveGroup = async (req, res) => {
         io.to(socketId).emit("group_dissolved", {
           chatId,
           groupName: chat.groupName,
-          dissolvedBy: {
-            _id: userId,
-            name: user.name
-          }
         });
       }
     });
@@ -366,7 +332,7 @@ exports.removeAdmin = async (req, res) => {
 
     const isAdmin = chat.admins.some(id => id.toString() === adminId.toString());
     if (!isAdmin) {
-      return res.status(403).json({ message: "Chỉ admin mới có thể xóa quyền admin" });
+      return res.status(403).json({ message: "Chỉ trưởng nhóm mới có thể xóa quyền phó nhóm" });
     }
 
     const isUserAdmin = chat.admins.some(id => id.toString() === userId.toString());
@@ -501,73 +467,43 @@ exports.updateGroupAvatar = async (req, res) => {
 
 exports.leaveGroup = async (req, res) => {
   try {
-      const { chatId } = req.body;
-      const userId = req.user._id;
-      const user = await User.findById(userId).select('name avatar');
-      
-      // Tìm nhóm chat
-      const chat = await Chat.findOne({ chatId, isGroupChat: true });
-      if (!chat) {
-          return res.status(404).json({ message: "Nhóm không tồn tại" });
-      }
-      
-      // Kiểm tra xem người dùng có phải là thành viên của nhóm không
-      if (!chat.participants.includes(userId)) {
-          return res.status(400).json({ message: "Bạn không phải là thành viên của nhóm này" });
-      }
-      
-      // Kiểm tra nếu người dùng là người tạo nhóm
-      const isCreator = chat.createdBy.toString() === userId.toString();
-      const isAdmin = chat.admins.includes(userId);
-      
-      // Nếu là người tạo nhóm, kiểm tra xem có admin khác không
-      if (isCreator) {
-          const otherAdmins = chat.admins.filter(adminId => 
-              adminId.toString() !== userId.toString()
-          );
-          
-          if (otherAdmins.length === 0) {
-              return res.status(400).json({
-                  message: "Bạn là người tạo nhóm và là admin duy nhất. Vui lòng gán quyền admin cho người khác trước khi rời nhóm hoặc chọn giải tán nhóm."
-              });
-          }
-      } 
-      // Nếu là admin thường (không phải người tạo), kiểm tra xem người tạo nhóm còn trong nhóm không
-      else if (isAdmin) {
-          const creatorStillInGroup = chat.participants.some(participantId => 
-              participantId.toString() === chat.createdBy.toString()
-          );
-          
-          // Nếu người tạo nhóm không còn trong nhóm và là admin cuối cùng
-          if (!creatorStillInGroup) {
-              const remainingAdmins = chat.admins.filter(adminId =>
-                  adminId.toString() !== userId.toString()
-              );
-              
-              if (remainingAdmins.length === 0) {
-                  return res.status(400).json({
-                      message: "Bạn là admin cuối cùng của nhóm và người tạo nhóm không còn trong nhóm. Vui lòng gán quyền admin cho người khác trước khi rời nhóm."
-                  });
-              }
-          }
-          // Nếu người tạo nhóm vẫn còn trong nhóm, admin có thể rời đi
-      }
-      
-      // Xóa người dùng khỏi danh sách thành viên và admin
-      chat.participants = chat.participants.filter(id => id.toString() !== userId.toString());
-      chat.admins = chat.admins.filter(id => id.toString() !== userId.toString());
-      
-      await chat.save();
+    const { chatId } = req.body;
+    const userId = req.user._id;
     
-    // Lấy thông tin đầy đủ của chat để gửi về
-    const updatedChat = await Chat.findOne({ chatId })
-    .populate('participants', 'name avatar')
-    .populate('admins', 'name avatar')
-    .populate('createdBy', 'name avatar');
+    // Tìm nhóm chat
+    const chat = await Chat.findOne({ chatId, isGroupChat: true });
+    
+    if (!chat) {
+      return res.status(404).json({ message: "Nhóm không tồn tại" });
+    }
+    
+    // Kiểm tra xem người dùng có phải là thành viên của nhóm không
+    if (!chat.participants.includes(userId)) {
+      return res.status(400).json({ message: "Bạn không phải là thành viên của nhóm này" });
+    }
+    
+    // Kiểm tra xem người dùng có phải là người tạo nhóm không
+    if (chat.createdBy.toString() === userId.toString()) {
+      return res.status(400).json({ 
+        message: "Người tạo nhóm không thể rời nhóm. Vui lòng chọn giải tán nhóm hoặc chuyển quyền sở hữu nhóm cho người khác" 
+      });
+    }
+    
+    // Xóa người dùng khỏi danh sách thành viên
+    chat.participants = chat.participants.filter(
+      (id) => id.toString() !== userId.toString()
+    );
+    
+    // Xóa người dùng khỏi danh sách admin nếu họ là admin
+    chat.admins = chat.admins.filter(
+      (id) => id.toString() !== userId.toString()
+    );
+    
+    await chat.save();
+    
     // Thông báo cho tất cả thành viên còn lại trong nhóm
     const io = req.app.get("io");
     const onlineUsers = req.app.get("onlineUsers");
-    
     
     // Thông báo cho các thành viên còn lại trong nhóm
     chat.participants.forEach((participantId) => {
@@ -576,13 +512,11 @@ exports.leaveGroup = async (req, res) => {
         io.to(socketId).emit("member_left_group", {
           chatId,
           userId,
-          userName: user.name,
-          groupName: chat.groupName,
-          chat: updatedChat // Thêm thông tin chat đầy đủ
+          groupName: chat.groupName
         });
       }
     });
-
+    
     // Thông báo cho người rời nhóm
     const userSocketId = onlineUsers.get(userId.toString());
     if (userSocketId) {
@@ -591,11 +525,75 @@ exports.leaveGroup = async (req, res) => {
         groupName: chat.groupName
       });
     }
-
+    
     res.status(200).json({ message: "Đã rời khỏi nhóm thành công" });
   } catch (error) {
     console.error("Lỗi rời nhóm:", error);
     res.status(500).json({ message: "Lỗi server", error: error.message });
   }
 };
+exports.transferGroupOwnership = async (req, res) => {
+  try {
+    const { chatId, newCreatorId } = req.body;
+    const userId = req.user._id;
 
+    // Tìm nhóm chat
+    const chat = await Chat.findOne({ chatId, isGroupChat: true });
+    if (!chat) {
+      return res.status(404).json({ message: "Không tồn tại nhóm" });
+    }
+
+    // Kiểm tra quyền trưởng nhóm
+    if (chat.createdBy.toString() !== userId.toString()) {
+      return res.status(403).json({ message: "Chỉ trưởng nhóm mới có thể chuyển quyền" });
+    }
+
+    // Kiểm tra người dùng mới có trong nhóm không
+    if (!chat.participants.includes(newCreatorId)) {
+      return res.status(400).json({ message: "Người dùng không phải là thành viên của nhóm" });
+    }
+
+    // Cập nhật trưởng nhóm mới
+    chat.createdBy = newCreatorId;
+    if (!chat.admins.includes(newCreatorId)) {
+      chat.admins.push(newCreatorId); // Thêm trưởng nhóm mới vào danh sách admin nếu chưa có
+    }
+
+    // Xóa quyền admin của trưởng nhóm cũ (nếu có)
+    chat.admins = chat.admins.filter((id) => id.toString() !== userId.toString());
+
+    // Lưu thay đổi
+    await chat.save();
+
+    // Lấy thông tin nhóm cập nhật
+    const updatedChat = await Chat.findOne({ chatId })
+      .populate('participants', 'name avatar')
+      .populate('admins', 'name avatar')
+      .populate('createdBy', 'name avatar');
+
+    // Gửi thông báo qua Socket.IO
+    const io = req.app.get("io");
+    const onlineUsers = req.app.get("onlineUsers");
+
+    // Thông báo cho các thành viên trong nhóm
+    chat.participants.forEach((participantId) => {
+      const socketId = onlineUsers.get(participantId.toString());
+      if (socketId) {
+        io.to(socketId).emit("group_ownership_transferred", {
+          chatId,
+          newCreatorId,
+          oldCreatorId: userId,
+          chat: updatedChat,
+        });
+      }
+    });
+
+    res.status(200).json({ 
+      message: "Đã chuyển quyền trưởng nhóm thành công", 
+      chat: updatedChat 
+    });
+  } catch (error) {
+    console.error("Lỗi chuyển quyền trưởng nhóm:", error);
+    res.status(500).json({ message: "Lỗi server", error: error.message });
+  }
+};

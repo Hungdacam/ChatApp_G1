@@ -27,4 +27,6 @@ router.post("/update-avatar", authMiddleware, upload, groupController.updateGrou
 // Rời nhóm
 router.post("/leave", authMiddleware, groupController.leaveGroup);
 
+//Chuyển quyền trưởng nhóm
+router.post("/transfer-ownership", authMiddleware, groupController.transferGroupOwnership);
 module.exports = router;

@@ -27,7 +27,6 @@ router.get("/list", authMiddleware, chatController.getChatList);
 router.post("/mark-read", authMiddleware, chatController.markAsRead);
 router.post("/test-emoji", authMiddleware, chatController.testEmojiStorage);
 router.post('/recall', authMiddleware, chatController.recallMessage);
-router.post('/send-file', authMiddleware, uploadSingleFile, chatController.sendFile);
 router.get("/:chatId", authMiddleware, chatController.getChatDetails);
 
 module.exports = router;
