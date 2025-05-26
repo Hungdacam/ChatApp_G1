@@ -323,7 +323,7 @@ export default function GroupManagement({ route }) {
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 16, color: "#222" }}>{item.name}</Text>
           <Text style={{ fontSize: 14, color: "#666" }}>
-            {isCreator ? "Người tạo" : isAdmin ? "Admin" : "Thành viên"}
+            {isCreator ? "Trưởng nhóm" : isAdmin ? "Phó nhóm" : "Thành viên"}
           </Text>
         </View>
         {isCurrentUserAdminOrCreator && !isCreator && item._id !== currentUserId && (
@@ -530,7 +530,7 @@ export default function GroupManagement({ route }) {
                 disabled={!selectedNewCreator}
               >
                 <Text style={{ color: "#fff", fontSize: 16, fontWeight: "600" }}>
-                  Chuyển quyền và rời
+                  Chuyển quyền và rời nhóm
                 </Text>
               </TouchableOpacity>
             </View>

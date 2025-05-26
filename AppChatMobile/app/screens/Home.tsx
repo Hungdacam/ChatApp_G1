@@ -8,7 +8,6 @@ import {
   SafeAreaView,
 } from "react-native";
 import React, { useRef, useState, useEffect } from "react";
-
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback } from "react";
 import { Ionicons } from "@expo/vector-icons";
@@ -18,6 +17,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import socket from "../config/socket";
 import { BASE_URL } from "../config/config";
+
 export default function Home() {
   const [search, setSearch] = useState("");
   const [chats, setChats] = useState([]);
@@ -27,20 +27,21 @@ export default function Home() {
   useFocusEffect(
     useCallback(() => {
       fetchChats();
-      
+
       socket.on("new_message", fetchChats);
       socket.on("new_group_created", fetchChats);
       socket.on("group_dissolved", fetchChats);
       socket.on("group_avatar_updated", fetchChats);
+      socket.on("left_group", fetchChats); // Thêm sự kiện left_group
       return () => {
         socket.off("new_message", fetchChats);
         socket.off("new_group_created", fetchChats);
         socket.off("group_dissolved", fetchChats);
-        socket.off("group_avatar_updated",fetchChats);
+        socket.off("group_avatar_updated", fetchChats);
+        socket.off("left_group", fetchChats);
       };
     }, [])
   );
-  
 
   const fetchChats = async () => {
     try {
@@ -57,8 +58,17 @@ export default function Home() {
         }
       );
 
-      console.log("Chats fetched:", response.data.chats); 
-      setChats(response.data.chats);
+      // Lấy danh sách hiddenChats từ AsyncStorage
+      const hiddenChats = await AsyncStorage.getItem("hiddenChats");
+      const hiddenChatsList = hiddenChats ? JSON.parse(hiddenChats) : [];
+
+      // Lọc bỏ các cuộc trò chuyện có chatId trong hiddenChatsList
+      const filteredChats = response.data.chats.filter(
+        (chat) => !hiddenChatsList.includes(chat.chatId)
+      );
+
+      console.log("Chats fetched:", filteredChats);
+      setChats(filteredChats);
     } catch (error) {
       console.error("Lỗi lấy danh sách chat:", error);
       alert("Không thể tải danh sách cuộc trò chuyện.");

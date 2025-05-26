@@ -370,6 +370,7 @@ export default function ChatScreen({ route }) {
 
   const deleteMessageLocally = async (messageId: string) => {
     try {
+      // Lưu messageId vào hiddenMessages
       const hidden = await AsyncStorage.getItem("hiddenMessages");
       const hiddenList = hidden ? JSON.parse(hidden) : [];
 
@@ -378,10 +379,23 @@ export default function ChatScreen({ route }) {
         await AsyncStorage.setItem("hiddenMessages", JSON.stringify(hiddenList));
       }
 
-      setMessages((prev) => prev.filter((msg) => msg.messageId !== messageId));
+      // Cập nhật danh sách tin nhắn
+      const updatedMessages = messages.filter((msg) => msg.messageId !== messageId);
+      setMessages(updatedMessages);
+
+      // Kiểm tra nếu không còn tin nhắn nào, ẩn cuộc trò chuyện
+      if (updatedMessages.length === 0) {
+        const hiddenChats = await AsyncStorage.getItem("hiddenChats");
+        const hiddenChatsList = hiddenChats ? JSON.parse(hiddenChats) : [];
+
+        if (!hiddenChatsList.includes(chatId)) {
+          hiddenChatsList.push(chatId);
+          await AsyncStorage.setItem("hiddenChats", JSON.stringify(hiddenChatsList));
+        }
+      }
     } catch (error) {
       console.error("Lỗi khi ẩn tin nhắn:", error);
-      Alert.alert("Lỗi", "Không thể xoá tin nhắn khỏi giao diện.");
+      Alert.alert("Lỗi", "Không thể xóa tin nhắn khỏi giao diện.");
     }
   };
 
@@ -390,20 +404,28 @@ export default function ChatScreen({ route }) {
     const isCurrentUser = item.senderId._id === currentUserId;
 
     const handleLongPress = () => {
+      const buttons = [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Xóa tin nhắn",
+          onPress: () => deleteMessageLocally(item.messageId),
+          style: "destructive",
+        },
+      ];
+
       if (isCurrentUser && !isRecalled) {
-        Alert.alert(
-          "Thu hồi tin nhắn",
-          "Bạn có muốn thu hồi tin nhắn này?",
-          [
-            { text: "Hủy", style: "cancel" },
-            {
-              text: "Thu hồi",
-              onPress: () => recallMessage(item.messageId),
-              style: "destructive",
-            },
-          ]
-        );
+        buttons.push({
+          text: "Thu hồi",
+          onPress: () => recallMessage(item.messageId),
+          style: "destructive",
+        });
       }
+
+      Alert.alert(
+        "Tùy chọn tin nhắn",
+        "Chọn hành động cho tin nhắn này:",
+        buttons
+      );
     };
 
     return (
@@ -687,6 +709,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
+    height: 40,
     borderWidth: 1,
     borderColor: "#ddd",
     borderRadius: 20,
