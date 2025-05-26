@@ -23,9 +23,10 @@ import EmojiModal from "react-native-emoji-modal";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { useNavigation } from "@react-navigation/native";
-import Modal from 'react-native-modal';
+import Modal from "react-native-modal";
 import ImageViewer from "react-native-image-zoom-viewer";
-import { Video } from 'expo-av';
+import { Video, ResizeMode } from "expo-av";
+import { WebView } from "react-native-webview"; // Thêm import WebView
 
 interface Message {
   messageId: string;
@@ -33,6 +34,7 @@ interface Message {
   senderId: { _id: string; name?: string; avatar?: string };
   content: string;
   fileUrl?: string;
+  file滴: string;
   fileName?: string;
   image?: string;
   video?: string;
@@ -40,6 +42,21 @@ interface Message {
   isRead: boolean;
   isRecalled?: boolean;
   createdAt: string;
+}
+
+interface Chat {
+  chatId: string;
+  name: string;
+  avatar?: string;
+  isGroupChat?: boolean;
+}
+
+interface CallData {
+  callId: string;
+  callType: string;
+  isGroupCall: boolean;
+  participants?: string[];
+  groupName?: string;
 }
 
 export default function ChatScreen({ route }) {
@@ -54,21 +71,76 @@ export default function ChatScreen({ route }) {
   const [visible, setIsVisible] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isSending, setIsSending] = useState(false);
+  const [forwardModalVisible, setForwardModalVisible] = useState(false);
+  const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
+  const [availableChats, setAvailableChats] = useState<Chat[]>([]);
+  const [incomingCall, setIncomingCall] = useState<CallData | null>(null);
+  const [activeCallId, setActiveCallId] = useState<string | null>(null);
+  const [streamToken, setStreamToken] = useState<string | null>(null);
+
   const imageMessages = messages
-    .filter(msg => msg.image)
-    .map(msg => ({ url: msg.image }));
+    .filter((msg) => typeof msg.image === "string" && !!msg.image)
+    .map((msg) => ({ url: msg.image as string }));
+
+  // Lấy Stream token
+  useEffect(() => {
+    const initializeStream = async () => {
+      try {
+        const token = await AsyncStorage.getItem("token");
+        if (!token) throw new Error("Không tìm thấy token");
+        const parsedToken = JSON.parse(token);
+
+        const response = await axios.get(`${BASE_URL}/api/stream/token`, {
+          headers: { Authorization: `Bearer ${parsedToken.token}` },
+        });
+
+        setStreamToken(response.data.token);
+      } catch (error) {
+        console.error("Lỗi lấy Stream token:", error);
+        Alert.alert("Lỗi", "Không thể lấy token video.");
+      }
+    };
+
+    initializeStream();
+  }, [currentUserId]);
 
   useEffect(() => {
     fetchMessages();
+    fetchAvailableChats();
+
+    socket.on("incoming_call", (data: { callId: string; caller: { _id: string; name: string; avatar: string } }) => {
+      setIncomingCall({ callId: data.callId, callType: "video", isGroupCall: false });
+      Alert.alert(
+        "Cuộc gọi đến",
+        `Cuộc gọi video từ ${data.caller.name}`,
+        [
+          { text: "Chấp nhận", onPress: () => handleAcceptCall(data.callId) },
+          { text: "Từ chối", onPress: () => handleRejectCall(data.callId), style: "destructive" },
+        ]
+      );
+    });
+
+    socket.on("call_ended", (data: { callId: string }) => {
+      if (incomingCall?.callId === data.callId || activeCallId === data.callId) {
+        setIncomingCall(null);
+        setActiveCallId(null);
+        Alert.alert("Thông báo", "Cuộc gọi đã kết thúc.");
+      }
+    });
+
+    socket.on("call_rejected", (data: { callId: string; message: string }) => {
+      if (incomingCall?.callId === data.callId) {
+        setIncomingCall(null);
+        Alert.alert("Thông báo", data.message);
+      }
+    });
 
     socket.on("new_message", (data: { message: Message }) => {
       if (data.message.chatId === chatId) {
         setMessages((prev) => {
           if (prev.some((msg) => msg.messageId === data.message.messageId)) {
             return prev.map((msg) =>
-              msg.messageId === data.message.messageId
-                ? { ...msg, ...data.message }
-                : msg
+              msg.messageId === data.message.messageId ? { ...msg, ...data.message } : msg
             );
           }
           const updatedMessages = [...prev, data.message];
@@ -86,7 +158,7 @@ export default function ChatScreen({ route }) {
     socket.on("group_member_added", fetchMessages);
     socket.on("group_member_removed", fetchMessages);
     socket.on("group_dissolved", () => {
-      Alert.alert("Thông báo", "Nhóm đã được giải tán.");
+      Alert.alert("Thông báo", "Nh sehen được giải tán.");
       navigation.navigate("HomeTabs", { screen: "Inbox" });
     });
     socket.on("group_avatar_updated", (data: { chatId: string; avatar: string }) => {
@@ -95,11 +167,13 @@ export default function ChatScreen({ route }) {
       }
     });
     socket.on("group_ownership_transferred", (data: { chatId: string; newCreatorId: string }) => {
-      if (data.chatId === chatId) {
-        Alert.alert("Thông báo", "Quyền trưởng nhóm đã được chuyển.");
-        fetchMessages();
-      }
-    });
+  if (data.chatId === chatId) {
+    Alert.alert("Thông báo", "Quyền trưởng nhóm đã được chuyển.");
+    fetchMessages();
+    // Làm mới chi tiết nhóm để cập nhật trạng thái trưởng nhóm
+    fetchGroupDetails();
+  }
+});
     socket.on("left_group", (data: { chatId: string; groupName: string }) => {
       if (data.chatId === chatId) {
         Alert.alert("Thông báo", `Bạn đã rời khỏi nhóm ${data.groupName}.`);
@@ -108,6 +182,7 @@ export default function ChatScreen({ route }) {
     });
 
     markMessageAsRead();
+
     return () => {
       socket.off("new_message");
       socket.off("group_member_added");
@@ -116,21 +191,38 @@ export default function ChatScreen({ route }) {
       socket.off("group_avatar_updated");
       socket.off("group_ownership_transferred");
       socket.off("left_group");
+      socket.off("incoming_call");
+      socket.off("call_ended");
+      socket.off("call_rejected");
     };
-  }, [chatId]);
+  }, [chatId, incomingCall, activeCallId, navigation]);
+const fetchGroupDetails = async () => {
+  try {
+    const token = await AsyncStorage.getItem("token");
+    if (!token) throw new Error("Không tìm thấy token");
+    const parsedToken = JSON.parse(token);
 
+    const response = await axios.get(`${BASE_URL}/api/chat/${chatId}`, {
+      headers: { Authorization: `Bearer ${parsedToken.token}` },
+    });
+
+    const chat = response.data;
+    setAvatar(chat.avatar || "https://via.placeholder.com/50");
+    // Cập nhật thêm các thông tin khác nếu cần
+  } catch (error) {
+    console.error("Lỗi lấy chi tiết nhóm:", error);
+    Alert.alert("Lỗi", "Không thể tải chi tiết nhóm.");
+  }
+};
   const fetchMessages = async () => {
     try {
       const token = await AsyncStorage.getItem("token");
       if (!token) throw new Error("Không tìm thấy token");
       const parsedToken = JSON.parse(token);
 
-      const response = await axios.get(
-        `${BASE_URL}/api/chat/messages/${chatId}`,
-        {
-          headers: { Authorization: `Bearer ${parsedToken.token}` },
-        }
-      );
+      const response = await axios.get(`${BASE_URL}/api/chat/messages/${chatId}`, {
+        headers: { Authorization: `Bearer ${parsedToken.token}` },
+      });
 
       let allMessages = response.data.sort(
         (a: Message, b: Message) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
@@ -152,6 +244,29 @@ export default function ChatScreen({ route }) {
     }
   };
 
+  const fetchAvailableChats = async () => {
+    try {
+      const token = await AsyncStorage.getItem("token");
+      if (!token) throw new Error("Không tìm thấy token");
+      const parsedToken = JSON.parse(token);
+
+      const response = await axios.get(`${BASE_URL}/api/chat/list`, {
+        headers: { Authorization: `Bearer ${parsedToken.token}` },
+      });
+
+      const chats = response.data.chats.map((chat: any) => ({
+        chatId: chat.chatId,
+        name: chat.name || (chat.isGroupChat ? "Nhóm không tên" : "Unknown"),
+        avatar: chat.avatar || "https://via.placeholder.com/50",
+        isGroupChat: chat.isGroupChat,
+      }));
+
+      setAvailableChats(chats.filter((chat) => chat.chatId !== chatId));
+    } catch (error) {
+      console.error("Lỗi lấy danh sách chat:", error);
+    }
+  };
+
   const pickImage = async () => {
     try {
       const res = await ImagePicker.launchImageLibraryAsync({
@@ -160,9 +275,7 @@ export default function ChatScreen({ route }) {
         quality: 1,
       });
 
-      if (res.canceled) {
-        return;
-      }
+      if (res.canceled) return;
 
       const file = res.assets[0];
       if (!file) {
@@ -170,7 +283,7 @@ export default function ChatScreen({ route }) {
         return;
       }
 
-      const imageSizeLimit = 5 * 1024 * 1024; // 5MB
+      const imageSizeLimit = 5 * 1024 * 1024;
       if (file.fileSize && file.fileSize > imageSizeLimit) {
         Alert.alert("Lỗi", "Ảnh vượt quá giới hạn 5MB.");
         return;
@@ -195,9 +308,7 @@ export default function ChatScreen({ route }) {
         quality: 1,
       });
 
-      if (res.canceled) {
-        return;
-      }
+      if (res.canceled) return;
 
       const file = res.assets[0];
       if (!file) {
@@ -205,7 +316,7 @@ export default function ChatScreen({ route }) {
         return;
       }
 
-      const videoSizeLimit = 10 * 1024 * 1024; // 10MB
+      const videoSizeLimit = 10 * 1024 * 1024;
       if (file.fileSize && file.fileSize > videoSizeLimit) {
         Alert.alert("Lỗi", "Video vượt quá giới hạn 10MB.");
         return;
@@ -229,9 +340,7 @@ export default function ChatScreen({ route }) {
         copyToCacheDirectory: true,
       });
 
-      if (res.canceled) {
-        return;
-      }
+      if (res.canceled) return;
 
       const file = res.assets[0];
       if (!file) {
@@ -239,7 +348,7 @@ export default function ChatScreen({ route }) {
         return;
       }
 
-      const fileSizeLimit = 25 * 1024 * 1024; // 25MB
+      const fileSizeLimit = 25 * 1024 * 1024;
       if (file.size && file.size > fileSizeLimit) {
         Alert.alert("Lỗi", "Tệp vượt quá giới hạn 25MB.");
         return;
@@ -370,7 +479,6 @@ export default function ChatScreen({ route }) {
 
   const deleteMessageLocally = async (messageId: string) => {
     try {
-      // Lưu messageId vào hiddenMessages
       const hidden = await AsyncStorage.getItem("hiddenMessages");
       const hiddenList = hidden ? JSON.parse(hidden) : [];
 
@@ -379,11 +487,9 @@ export default function ChatScreen({ route }) {
         await AsyncStorage.setItem("hiddenMessages", JSON.stringify(hiddenList));
       }
 
-      // Cập nhật danh sách tin nhắn
       const updatedMessages = messages.filter((msg) => msg.messageId !== messageId);
       setMessages(updatedMessages);
 
-      // Kiểm tra nếu không còn tin nhắn nào, ẩn cuộc trò chuyện
       if (updatedMessages.length === 0) {
         const hiddenChats = await AsyncStorage.getItem("hiddenChats");
         const hiddenChatsList = hiddenChats ? JSON.parse(hiddenChats) : [];
@@ -399,19 +505,118 @@ export default function ChatScreen({ route }) {
     }
   };
 
+  const forwardMessage = async (targetChatId: string) => {
+    try {
+      const token = await AsyncStorage.getItem("token");
+      if (!token) throw new Error("Không tìm thấy token");
+      const parsedToken = JSON.parse(token);
+
+      if (!selectedMessage) return;
+
+      const forwardData = {
+        chatId: targetChatId,
+        content: selectedMessage.content,
+        isForwarded: true,
+        originalMessage: {
+          messageId: selectedMessage.messageId,
+          senderId: selectedMessage.senderId._id,
+          createdAt: selectedMessage.createdAt,
+          content: selectedMessage.content,
+          image: selectedMessage.image,
+          video: selectedMessage.video,
+          fileUrl: selectedMessage.fileUrl,
+          fileName: selectedMessage.fileName,
+        },
+      };
+
+      await axios.post(`${BASE_URL}/api/chat/send`, forwardData, {
+        headers: { Authorization: `Bearer ${parsedToken.token}` },
+      });
+
+      setForwardModalVisible(false);
+      setSelectedMessage(null);
+      Alert.alert("Thành công", "Tin nhắn đã được chuyển tiếp.");
+    } catch (error) {
+      console.error("Lỗi chuyển tiếp tin nhắn:", error);
+      Alert.alert("Lỗi", "Không thể chuyển tiếp tin nhắn.");
+    }
+  };
+
+  const createCall = async (isGroup: boolean) => {
+    try {
+      const token = await AsyncStorage.getItem("token");
+      if (!token) throw new Error("Không tìm thấy token");
+      const parsedToken = JSON.parse(token);
+
+      const endpoint = isGroup ? `${BASE_URL}/api/stream/group-call` : `${BASE_URL}/api/stream/call`;
+      const body = isGroup
+        ? { chatId, callType: "video" }
+        : { participantIds: [receiverId], chatId };
+
+      const response = await axios.post(endpoint, body, {
+        headers: { Authorization: `Bearer ${parsedToken.token}` },
+      });
+
+      const { callId, participants } = response.data;
+
+      setActiveCallId(callId);
+
+      socket.emit("call_user", {
+        callId,
+        participantIds: isGroup ? participants : [receiverId],
+        chatId,
+        callerId: currentUserId,
+      });
+
+      Alert.alert("Thành công", `Cuộc gọi video đã được khởi tạo với ID: ${callId}`);
+    } catch (error) {
+      console.error("Lỗi tạo cuộc gọi:", error);
+      Alert.alert("Lỗi", "Không thể tạo cuộc gọi.");
+    }
+  };
+
+  const handleAcceptCall = async (callId: string) => {
+    setActiveCallId(callId);
+    setIncomingCall(null);
+  };
+
+  const handleRejectCall = (callId: string) => {
+    socket.emit("reject_call", { callId, callerId: incomingCall?.callId });
+    setIncomingCall(null);
+  };
+
+  const endCall = async (callId: string) => {
+    try {
+      const token = await AsyncStorage.getItem("token");
+      if (!token) throw new Error("Không tìm thấy token");
+      const parsedToken = JSON.parse(token);
+
+      await axios.put(`${BASE_URL}/api/stream/call/${callId}/end`, {}, {
+        headers: { Authorization: `Bearer ${parsedToken.token}` },
+      });
+
+      socket.emit("end_call", { callId });
+      setActiveCallId(null);
+      Alert.alert("Thành công", "Cuộc gọi đã kết thúc.");
+    } catch (error) {
+      console.error("Lỗi kết thúc cuộc gọi:", error);
+      Alert.alert("Lỗi", "Không thể kết thúc cuộc gọi.");
+    }
+  };
+
   const renderMessage = ({ item }: { item: Message }) => {
     const isRecalled = item.isRecalled || item.content === "Tin nhắn đã được thu hồi";
     const isCurrentUser = item.senderId._id === currentUserId;
 
     const handleLongPress = () => {
-      const buttons = [
-        { text: "Hủy", style: "cancel" },
-        {
-          text: "Xóa tin nhắn",
-          onPress: () => deleteMessageLocally(item.messageId),
-          style: "destructive",
-        },
-      ];
+      const buttons = [];
+
+      buttons.push({ text: "Hủy", style: "cancel" });
+      buttons.push({
+        text: "Xóa tin nhắn",
+        onPress: () => deleteMessageLocally(item.messageId),
+        style: "destructive",
+      });
 
       if (isCurrentUser && !isRecalled) {
         buttons.push({
@@ -421,11 +626,33 @@ export default function ChatScreen({ route }) {
         });
       }
 
-      Alert.alert(
-        "Tùy chọn tin nhắn",
-        "Chọn hành động cho tin nhắn này:",
-        buttons
-      );
+      if (!isRecalled) {
+        buttons.push({
+          text: "Chuyển tiếp",
+          onPress: () => {
+            setSelectedMessage(item);
+            setForwardModalVisible(true);
+          },
+          style: "default",
+        });
+      }
+
+      if (buttons.length > 3 && Platform.OS === "android") {
+        const moreButtons = buttons.splice(2, buttons.length - 2);
+        buttons.push({
+          text: "Thêm",
+          onPress: () => {
+            Alert.alert(
+              "Tùy chọn tin nhắn",
+              "Chọn hành động khác:",
+              [{ text: "Hủy", style: "cancel" }, ...moreButtons]
+            );
+          },
+          style: "default",
+        });
+      }
+
+      Alert.alert("Tùy chọn tin nhắn", "Chọn hành động cho tin nhắn này:", buttons);
     };
 
     return (
@@ -496,7 +723,7 @@ export default function ChatScreen({ route }) {
                   source={{ uri: item.video }}
                   style={styles.messageVideo}
                   useNativeControls
-                  resizeMode="contain"
+                  resizeMode={ResizeMode.CONTAIN}
                   isLooping={false}
                   onError={(error) => console.log("Video load error:", error)}
                 />
@@ -571,6 +798,21 @@ export default function ChatScreen({ route }) {
             style={styles.headerAvatar}
           />
           <Text style={styles.headerText}>{name}</Text>
+          {isGroupChat ? (
+            <TouchableOpacity
+              onPress={() => createCall(true)}
+              style={{ marginLeft: "auto" }}
+            >
+              <Ionicons name="videocam-outline" size={24} color="#007AFF" />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              onPress={() => createCall(false)}
+              style={{ marginLeft: "auto" }}
+            >
+              <Ionicons name="videocam-outline" size={24} color="#007AFF" />
+            </TouchableOpacity>
+          )}
           {isGroupChat && (
             <TouchableOpacity
               onPress={() =>
@@ -580,12 +822,39 @@ export default function ChatScreen({ route }) {
                   currentUserId,
                 })
               }
-              style={{ marginLeft: "auto" }}
+              style={{ marginLeft: 10 }}
             >
               <Ionicons name="settings-outline" size={24} color="#007AFF" />
             </TouchableOpacity>
           )}
         </View>
+        {activeCallId && streamToken && (
+          <View style={styles.callContainer}>
+        <WebView
+    source={{
+        uri: `https://453d-171-248-108-160.ngrok-free.app/call.html?callId=${activeCallId}&userId=${currentUserId}&token=${streamToken}`,
+    }}
+    userAgent="Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
+    style={{ flex: 1 }}
+    onError={(syntheticEvent) => {
+        const { nativeEvent } = syntheticEvent;
+        console.warn('WebView error: ', nativeEvent);
+        Alert.alert('Lỗi', 'Không thể tải cuộc gọi. Vui lòng kiểm tra kết nối hoặc CSP.');
+    }}
+    onMessage={(event) => {
+        if (event.nativeEvent.data === "call_ended") {
+            endCall(activeCallId);
+        }
+    }}
+/>
+            <TouchableOpacity
+              style={styles.endCallButton}
+              onPress={() => endCall(activeCallId)}
+            >
+              <Text style={styles.endCallButtonText}>Kết thúc cuộc gọi</Text>
+            </TouchableOpacity>
+          </View>
+        )}
         <FlatList
           ref={flatListRef}
           data={messages}
@@ -632,7 +901,11 @@ export default function ChatScreen({ route }) {
             <TouchableOpacity onPress={pickFile} style={styles.iconButton}>
               <Ionicons name="attach-outline" size={24} color="#333" />
             </TouchableOpacity>
-            <Button title="Gửi" onPress={sendMessage} disabled={!content.trim() && !selectedFile} />
+            <Button
+              title="Gửi"
+              onPress={sendMessage}
+              disabled={!content.trim() && !selectedFile}
+            />
           </View>
         </View>
 
@@ -645,25 +918,61 @@ export default function ChatScreen({ route }) {
             emojiSize={30}
           />
         )}
-      </KeyboardAvoidingView>
 
-      {visible && (
         <Modal
-          isVisible={visible}
-          onBackdropPress={() => setIsVisible(false)}
-          onBackButtonPress={() => setIsVisible(false)}
-          style={{ margin: 0 }}
+          isVisible={forwardModalVisible}
+          onBackdropPress={() => setForwardModalVisible(false)}
+          onBackButtonPress={() => setForwardModalVisible(false)}
+          style={styles.forwardModal}
         >
-          <ImageViewer
-            imageUrls={imageMessages}
-            index={currentImageIndex}
-            onSwipeDown={() => setIsVisible(false)}
-            enableSwipeDown
-            onCancel={() => setIsVisible(false)}
-            saveToLocalByLongPress={false}
-          />
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Chọn cuộc trò chuyện để chuyển tiếp</Text>
+            <FlatList
+              data={availableChats}
+              keyExtractor={(item) => item.chatId}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.chatItem}
+                  onPress={() => forwardMessage(item.chatId)}
+                >
+                  <Image
+                    source={{ uri: item.avatar }}
+                    style={styles.chatAvatar}
+                  />
+                  <Text style={styles.chatName}>{item.name}</Text>
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={
+                <Text style={styles.emptyText}>Không có cuộc trò chuyện nào.</Text>
+              }
+            />
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => setForwardModalVisible(false)}
+            >
+              <Text style={styles.closeButtonText}>Đóng</Text>
+            </TouchableOpacity>
+          </View>
         </Modal>
-      )}
+
+        {visible && (
+          <Modal
+            isVisible={visible}
+            onBackdropPress={() => setIsVisible(false)}
+            onBackButtonPress={() => setIsVisible(false)}
+            style={{ margin: 0 }}
+          >
+            <ImageViewer
+              imageUrls={imageMessages}
+              index={currentImageIndex}
+              onSwipeDown={() => setIsVisible(false)}
+              enableSwipeDown
+              onCancel={() => setIsVisible(false)}
+              saveToLocalByLongPress={false}
+            />
+          </Modal>
+        )}
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -794,5 +1103,71 @@ const styles = StyleSheet.create({
   messageStatus: {
     fontSize: 10,
     color: "#ddd",
+  },
+  forwardModal: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContent: {
+    backgroundColor: "#fff",
+    borderRadius: 10,
+    padding: 20,
+    width: "80%",
+    maxHeight: "70%",
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 10,
+    textAlign: "center",
+  },
+  chatItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 10,
+    borderBottomWidth: 1,
+    borderColor: "#eee",
+  },
+  chatAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 10,
+  },
+  chatName: {
+    fontSize: 16,
+    color: "#333",
+  },
+  emptyText: {
+    textAlign: "center",
+    color: "#666",
+    padding: 10,
+  },
+  closeButton: {
+    marginTop: 10,
+    padding: 10,
+    backgroundColor: "#007AFF",
+    borderRadius: 5,
+    alignItems: "center",
+  },
+  closeButtonText: {
+    color: "#fff",
+    fontSize: 16,
+  },
+  callContainer: {
+    flex: 1,
+    backgroundColor: "#000",
+  },
+  endCallButton: {
+    backgroundColor: "#ff3b30",
+    padding: 10,
+    borderRadius: 5,
+    alignItems: "center",
+    margin: 10,
+  },
+  endCallButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
   },
 });

@@ -234,32 +234,55 @@ export default function GroupManagement({ route }) {
     );
   };
 
-  const transferOwnershipAndLeave = async () => {
+  const transferOwnership = async () => {
     if (!selectedNewCreator) {
       Alert.alert("Lỗi", "Vui lòng chọn một thành viên để chuyển quyền trưởng nhóm.");
       return;
     }
 
-    try {
-      const token = await AsyncStorage.getItem("token");
-      if (!token) throw new Error("Không tìm thấy token");
-      const parsedToken = JSON.parse(token);
+    const newCreatorName = members.find((member) => member._id === selectedNewCreator)?.name || "thành viên";
 
-      await axios.post(
-        `${BASE_URL}/api/group/transfer-ownership`,
-        { chatId, newCreatorId: selectedNewCreator },
+    Alert.alert(
+      "Xác nhận chuyển quyền",
+      `Bạn có chắc chắn muốn chuyển quyền trưởng nhóm cho ${newCreatorName}?`,
+      [
+        { text: "Hủy", style: "cancel" },
         {
-          headers: { Authorization: `Bearer ${parsedToken.token}` },
-        }
-      );
+          text: "Xác nhận",
+          style: "default",
+          onPress: async () => {
+            try {
+              const token = await AsyncStorage.getItem("token");
+              if (!token) throw new Error("Không tìm thấy token");
+              const parsedToken = JSON.parse(token);
 
-      Alert.alert("Thành công", "Đã chuyển quyền trưởng nhóm và rời nhóm.");
-      setIsModalVisible(false);
-      navigation.navigate("HomeTabs", { screen: "Inbox" });
-    } catch (error) {
-      console.error("Lỗi chuyển quyền trưởng nhóm:", error);
-      Alert.alert("Lỗi", error.response?.data?.message || "Không thể chuyển quyền trưởng nhóm.");
-    }
+              await axios.post(
+                `${BASE_URL}/api/group/transfer-ownership`,
+                { chatId, newCreatorId: selectedNewCreator },
+                {
+                  headers: { Authorization: `Bearer ${parsedToken.token}` },
+                }
+              );
+
+              Alert.alert("Thành công", "Đã chuyển quyền trưởng nhóm thành công.");
+              setIsModalVisible(false);
+              setSelectedNewCreator(null);
+              fetchGroupDetails();
+              navigation.navigate("ChatScreen", {
+                chatId,
+                groupName,
+                currentUserId,
+                avatar: groupAvatar,
+                isGroupChat: true,
+              });
+            } catch (error) {
+              console.error("Lỗi chuyển quyền trưởng nhóm:", error);
+              Alert.alert("Lỗi", error.response?.data?.message || "Không thể chuyển quyền trưởng nhóm.");
+            }
+          },
+        },
+      ]
+    );
   };
 
   const leaveGroup = async () => {
@@ -305,6 +328,7 @@ export default function GroupManagement({ route }) {
     const isAdmin = admins.includes(item._id);
     const isCreator = item._id === creatorId;
     const isCurrentUserAdminOrCreator = admins.includes(currentUserId) || creatorId === currentUserId;
+    const isCurrentUserCreator = creatorId === currentUserId;
 
     return (
       <View
@@ -328,7 +352,7 @@ export default function GroupManagement({ route }) {
         </View>
         {isCurrentUserAdminOrCreator && !isCreator && item._id !== currentUserId && (
           <View style={{ flexDirection: "row" }}>
-            {!isAdmin && (
+            {isCurrentUserCreator && !isAdmin && (
               <TouchableOpacity
                 onPress={() => assignAdmin(item._id)}
                 style={{ marginRight: 8 }}
@@ -336,7 +360,7 @@ export default function GroupManagement({ route }) {
                 <Ionicons name="shield-checkmark-outline" size={24} color="#007AFF" />
               </TouchableOpacity>
             )}
-            {isAdmin && (
+            {isCurrentUserCreator && isAdmin && (
               <TouchableOpacity
                 onPress={() => removeAdmin(item._id)}
                 style={{ marginRight: 8 }}
@@ -344,9 +368,11 @@ export default function GroupManagement({ route }) {
                 <Ionicons name="shield-outline" size={24} color="#FF3B30" />
               </TouchableOpacity>
             )}
-            <TouchableOpacity onPress={() => removeMember(item._id)}>
-              <Ionicons name="trash-outline" size={24} color="#FF3B30" />
-            </TouchableOpacity>
+            {(!isAdmin || isCurrentUserCreator) && (
+              <TouchableOpacity onPress={() => removeMember(item._id)}>
+                <Ionicons name="trash-outline" size={24} color="#FF3B30" />
+              </TouchableOpacity>
+            )}
           </View>
         )}
       </View>
@@ -430,6 +456,22 @@ export default function GroupManagement({ route }) {
             Thêm thành viên
           </Text>
         </TouchableOpacity>
+        {creatorId === currentUserId && (
+          <TouchableOpacity
+            style={{
+              backgroundColor: "#007AFF",
+              padding: 12,
+              borderRadius: 8,
+              alignItems: "center",
+              marginBottom: 12,
+            }}
+            onPress={() => setIsModalVisible(true)}
+          >
+            <Text style={{ color: "#fff", fontSize: 16, fontWeight: "600" }}>
+              Chuyển quyền trưởng nhóm
+            </Text>
+          </TouchableOpacity>
+        )}
         <FlatList
           data={members}
           keyExtractor={(item) => item._id}
@@ -526,11 +568,11 @@ export default function GroupManagement({ route }) {
                   alignItems: "center",
                   opacity: selectedNewCreator ? 1 : 0.5,
                 }}
-                onPress={transferOwnershipAndLeave}
+                onPress={transferOwnership}
                 disabled={!selectedNewCreator}
               >
                 <Text style={{ color: "#fff", fontSize: 16, fontWeight: "600" }}>
-                  Chuyển quyền và rời nhóm
+                  Chuyển quyền
                 </Text>
               </TouchableOpacity>
             </View>

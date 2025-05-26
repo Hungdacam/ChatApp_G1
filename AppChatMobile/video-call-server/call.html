@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Video Call</title>
+    <link rel="stylesheet" href="https://cdn.getstream.io/video-sdk/styles.css">
+</head>
+<body>
+    <div id="call-container"></div>
+    <button onclick="endCall()">End Call</button>
+    <script src="https://cdn.getstream.io/video-sdk/video.min.js"></script>
+    <script>
+        async function initCall() {
+            const client = new StreamVideoClient({
+                apiKey: 'YOUR_API_KEY',
+                token: new URLSearchParams(window.location.search).get('token'),
+                user: { id: new URLSearchParams(window.location.search).get('userId') }
+            });
+            const call = client.call('default', new URLSearchParams(window.location.search).get('callId'));
+            await call.join({ create: true });
+            call.on('call_ended', () => {
+                window.ReactNativeWebView.postMessage('call_ended');
+            });
+        }
+
+        function endCall() {
+            window.ReactNativeWebView.postMessage('call_ended');
+        }
+
+        initCall();
+    </script>
+</body>
+</html>

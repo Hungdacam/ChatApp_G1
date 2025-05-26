@@ -8,6 +8,9 @@
     "facebookAppId": "698245142865922",
     "facebookDisplayName": "AppChat",
     "version": "1.0.0",
+    "extra": {
+      "STREAM_API_KEY": "8xpuuh264zb6"
+    },
     "sdkVersion": "53.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -57,6 +60,12 @@
       "expo-facebook",
       "expo-font"
       
+      
+    ],
+    "permissions": [
+      "CAMERA",
+      "RECORD_AUDIO",
+      "MODIFY_AUDIO_SETTINGS"
     ],
     "extra": {
       "eas": {

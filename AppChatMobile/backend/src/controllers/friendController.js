@@ -1,4 +1,4 @@
-const Friendship = require('../models/friendship');
+const Friendship = require('../models/friendship.model');
 const User = require('../models/user.model');
 const Chat = require('../models/chat.model');
 const { v4: uuidv4 } = require('uuid');

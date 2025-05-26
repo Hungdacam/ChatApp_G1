@@ -1,5 +1,5 @@
 const Chat = require("../models/chat.model");
-const friendship = require("../models/friendship");
+const friendship = require("../models/friendship.model");
 const Message = require("../models/message.model");
 const { v4: uuidv4 } = require("uuid");
 const { emitNewMessage } = require("../services/socket.service");
