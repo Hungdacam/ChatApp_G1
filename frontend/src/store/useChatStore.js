@@ -99,7 +99,7 @@ export const useChatStore = create((set, get) => ({
     }
   },
   
-  sendMessage: async ({ chatId, content, image, video }) => {
+  sendMessage: async ({ chatId, content, image, video , file }) => {
     const tempId = `temp-${Date.now()}`;
     const userId = localStorage.getItem("userId");
     
@@ -108,6 +108,7 @@ export const useChatStore = create((set, get) => ({
     if (content) formData.append("content", content);
     if (image) formData.append("image", image);
     if (video) formData.append("video", video);
+    if (file) formData.append("file", file);
     
     const tempMessage = {
       messageId: tempId,
@@ -146,17 +147,25 @@ export const useChatStore = create((set, get) => ({
         if (!content) tempMessage.content = "[Video]";
       }
       
+       // Xử lý preview cho file
+      if (file) {
+        tempMessage.fileName = file.name;
+        tempMessage.fileSize = file.size;
+        if (!content) tempMessage.content = file.name;
+      }
+
       const { messages } = get();
-      const existingSimilarMsg = messages.find(msg => 
-        msg.content === tempMessage.content && 
+      const existingSimilarMsg = messages.find(msg =>
+        msg.content === tempMessage.content &&
         msg.senderId._id === tempMessage.senderId._id &&
-        !msg.isPending && 
+        !msg.isPending &&
         Math.abs(new Date(msg.createdAt) - new Date(tempMessage.createdAt)) < 5000
       );
-      
+
       if (!existingSimilarMsg) {
         set({ messages: [...messages, tempMessage] });
       }
+
       
       const response = await axios.post("/chat/send", formData, {
         headers: {
@@ -190,71 +199,7 @@ export const useChatStore = create((set, get) => ({
     }
   },
   
-  sendFile: async ({ chatId, file }) => {
-    const tempId = `temp-${Date.now()}`;
-    const userId = localStorage.getItem("userId");
-    
-    const formData = new FormData();
-    formData.append("chatId", chatId);
-    formData.append("file", file);
-    
-    const tempMessage = {
-      messageId: tempId,
-      chatId,
-      senderId: {
-        _id: userId,
-        name: localStorage.getItem("userName") || "Tôi",
-        avatar: localStorage.getItem("userAvatar") || "https://via.placeholder.com/50"
-      },
-      content: file.name,
-      fileName: file.name,
-      fileSize: file.size,
-      createdAt: new Date().toISOString(),
-      isRead: false,
-      isPending: true,
-    };
-    
-    const { messages } = get();
-    set({ messages: [...messages, tempMessage] });
-    
-    try {
-      const response = await axios.post("/chat/send-file", formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-      
-      console.log("Kết quả gửi file:", response.data);
-      
-      const serverMessage = response.data;
-      const updatedMessages = get().messages.map(msg => 
-        msg.messageId === tempId 
-          ? { 
-              ...serverMessage, 
-              messageId: serverMessage.messageId,
-              fileName: serverMessage.fileName || file.name,
-              fileSize: file.size,
-              fileUrl: serverMessage.fileUrl,
-              isPending: false
-            } 
-          : msg
-      );
-      
-      set({ messages: updatedMessages });
-      return response.data;
-    } catch (error) {
-      console.error("Lỗi khi gửi file:", error);
-      
-      const updatedMessages = get().messages.map(msg =>
-        msg.messageId === tempId
-          ? { ...msg, isError: true, isPending: false }
-          : msg
-      );
-      set({ messages: updatedMessages });
-      
-      throw error;
-    }
-  },
+  
 
   addMessage: (message) => {
     const { messages, selectedChat, chats, getMessages } = get();
@@ -308,7 +253,7 @@ export const useChatStore = create((set, get) => ({
       if (chat.chatId === message.chatId) {
         return {
           ...chat,
-          lastMessage: message.content || "[Media]",
+          lastMessage: message.content || (message.fileUrl ? "[File]" : message.image ? "[Image]" : message.video ? "[Video]" : "[Media]"),
           updatedAt: message.createdAt
         };
       }
@@ -663,29 +608,26 @@ export const useChatStore = create((set, get) => ({
   leaveGroup: async (chatId) => {
     set({ isRemovingMember: true, error: null });
     try {
-        const response = await axios.post("/group/leave", { chatId });
-        
-        // Xóa nhóm khỏi danh sách chat
-        const { chats, selectedChat } = get();
-        const updatedChats = chats.filter(chat => chat.chatId !== chatId);
-        
-        set({
-            chats: updatedChats,
-            selectedChat: selectedChat?.chatId === chatId ? null : selectedChat,
-            isRemovingMember: false
-        });
-        
-        return response.data;
+      await axios.post("/group/leave", { chatId });
+      
+      // Xóa nhóm khỏi danh sách chat
+      const { chats, selectedChat } = get();
+      const updatedChats = chats.filter(chat => chat.chatId !== chatId);
+      
+      set({
+        chats: updatedChats,
+        selectedChat: selectedChat?.chatId === chatId ? null : selectedChat,
+        isRemovingMember: false
+      });
     } catch (error) {
-        console.error("Lỗi khi rời nhóm:", error);
-        set({
-            error: error.response?.data?.message || "Lỗi khi rời nhóm",
-            isRemovingMember: false
-        });
-        throw error;
+      console.error("Lỗi khi rời nhóm:", error);
+      set({
+        error: error.response?.data?.message || "Lỗi khi rời nhóm",
+        isRemovingMember: false
+      });
+      throw error;
     }
-},
-
+  },
   
   assignAdmin: async (chatId, userId) => {
     set({ error: null });

@@ -1,3 +1,4 @@
+// useSocketStore.js
 import { io } from "socket.io-client";
 import { create } from "zustand";
 import { useChatStore } from "./useChatStore";
@@ -45,7 +46,9 @@ export const useSocketStore = create((set) => ({
         ...data.message,
         image: data.message.image || data.message.imageUrl, // Hỗ trợ cả image và imageUrl
         video: data.message.video || data.message.videoUrl, // Hỗ trợ cả video và videoUrl
-        fileUrl: data.message.fileUrl
+        fileUrl: data.message.fileUrl,
+        fileName: data.message.fileName,
+        fileSize: data.message.fileSize
       };
       useChatStore.getState().addMessage(updatedMessage);
       const { messages } = useChatStore.getState();
@@ -215,8 +218,11 @@ export const useSocketStore = create((set) => ({
       const chatStore = useChatStore.getState();
       const { chats, selectedChat } = chatStore;
       
+      // Hiển thị thông báo
+      toast.error(`Bạn đã bị xóa khỏi nhóm "${data.groupName || 'nhóm chat'}"`);
       // Xóa nhóm khỏi danh sách chat
       const updatedChats = chats.filter(chat => chat.chatId !== data.chatId);
+      
       
       chatStore.setState({ 
         chats: updatedChats,
@@ -413,33 +419,18 @@ socket.on("admin_assigned", (data) => {
         console.error("Dữ liệu không hợp lệ từ sự kiện member_left_group:", data);
         return;
       }
-    
+      
       const chatStore = useChatStore.getState();
       const { chats, selectedChat } = chatStore;
-    
-      // Hiển thị thông báo cho người dùng
-      toast(`${data.userName} đã rời khỏi nhóm "${data.groupName}"`);
-    
-      // Nếu server gửi đầy đủ thông tin chat
-      if (data.chat) {
-        const updatedChats = chats.map(chat => 
-          chat.chatId === data.chatId ? {...data.chat, isGroupChat: true} : chat
-        );
-        
-        useChatStore.setState({
-          chats: updatedChats,
-          selectedChat: selectedChat?.chatId === data.chatId ? {...data.chat, isGroupChat: true} : selectedChat
-        });
-        return;
-      }
-    
-      // Nếu không có data.chat, sử dụng logic hiện tại
+      
+      // Tìm chat trong danh sách hiện tại
       const chatToUpdate = chats.find(chat => chat.chatId === data.chatId);
+      
       if (!chatToUpdate) {
         console.error("Không tìm thấy chat với ID:", data.chatId);
         return;
       }
-    
+      
       // Cập nhật danh sách participants
       const updatedChat = {
         ...chatToUpdate,
@@ -459,18 +450,17 @@ socket.on("admin_assigned", (data) => {
         createdBy: chatToUpdate.createdBy,
         updatedAt: new Date().toISOString()
       };
-    
+      
       // Cập nhật thông tin nhóm trong danh sách chat
       const updatedChats = chats.map(chat =>
         chat.chatId === data.chatId ? updatedChat : chat
       );
-    
-      useChatStore.setState({
+      
+      chatStore.setState({
         chats: updatedChats,
         selectedChat: selectedChat?.chatId === data.chatId ? updatedChat : selectedChat
       });
     });
-    
     
     
     socket.on("left_group", (data) => {

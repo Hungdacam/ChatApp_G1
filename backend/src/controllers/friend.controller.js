@@ -101,14 +101,26 @@ exports.acceptFriendRequest = async (req, res) => {
     request.updatedAt = Date.now();
     await request.save();
 
-    // Tạo cuộc trò chuyện 1-1
-    const chatId = uuidv4();
-    const chat = new Chat({
-      chatId,
-      participants: [senderId, receiverId],
+    // Kiểm tra xem đã có cuộc trò chuyện 1-1 giữa hai người dùng chưa
+    let chat = await Chat.findOne({
+      participants: { $all: [senderId, receiverId], $size: 2 },
       isGroupChat: false,
     });
-    await chat.save();
+
+    let chatId;
+    if (!chat) {
+      // Nếu chưa có, tạo cuộc trò chuyện mới
+      chatId = uuidv4();
+      chat = new Chat({
+        chatId,
+        participants: [senderId, receiverId],
+        isGroupChat: false,
+      });
+      await chat.save();
+    } else {
+      // Nếu đã có, sử dụng chatId của cuộc trò chuyện cũ
+      chatId = chat.chatId;
+    }
 
     // Gửi thông báo realtime
     const io = req.app.get('io');
@@ -222,5 +234,28 @@ exports.rejectFriendRequest = async (req, res) => {
   } catch (error) {
     console.error('Lỗi từ chối lời mời:', error.message);
     res.status(500).json({ message: 'Lỗi server', error: error.message });
+  }
+};
+exports.unfriend = async (req, res) => {
+  const userId1 = req.user._id;
+  const { friendId: userId2  } = req.body;
+
+  try {
+
+    const deleted = await Friendship.findOneAndDelete({
+      $or: [
+        { userId1, userId2, status: 'accepted' },
+        { userId1: userId2, userId2: userId1, status: 'accepted' },
+      ],
+    });
+
+    if (!deleted) {
+      return res.status(404).json({ message: 'Không tìm thấy bạn bè để hủy' });
+    }
+
+    res.status(200).json({ message: 'Đã hủy kết bạn thành công' });
+  } catch (error) {
+    console.error('Lỗi hủy kết bạn:', error.message);
+    res.status(500).json({ message: 'Lỗi server' });
   }
 };
