@@ -141,6 +141,13 @@ const MessageInput = () => {
   // Gửi tin nhắn - Đã sửa để không xử lý file
   const handleSendMessage = async (e) => {
     e.preventDefault();
+    if (!selectedChat || !selectedChat.participants.some(p => {
+      const participantId = typeof p === 'object' && p._id ? p._id.toString() : p.toString();
+      return participantId === localStorage.getItem("userId");
+    })) {
+      toast.error("Bạn không còn là thành viên của nhóm này");
+      return;
+    }
     if ((!text.trim() && !imagePreview && !videoPreview) || !selectedChat) return;
     
     setIsSending(true);

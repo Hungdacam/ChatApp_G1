@@ -177,10 +177,17 @@ exports.removeGroupMember = async (req, res) => {
     if (!isOwner && chat.admins.map(id => id.toString()).includes(userId.toString())) {
       return res.status(403).json({ message: "Phó nhóm không thể xóa phó nhóm khác" });
     }
-
+    console.log("Trước khi xóa - Participants:", chat.participants);
+    console.log("User ID cần xóa:", userId);
     // Xóa user khỏi participants và admins
-    chat.participants = chat.participants.filter(id => id.toString() !== userId.toString());
+    chat.participants = chat.participants.filter(id => {
+      const participantId = id.toString();
+      const userIdStr = userId.toString();
+      console.log(`So sánh: ${participantId} !== ${userIdStr} = ${participantId !== userIdStr}`);
+      return participantId !== userIdStr;
+    });
     chat.admins = chat.admins.filter(id => id.toString() !== userId.toString());
+    console.log("Sau khi xóa - Participants:", chat.participants);
     await chat.save();
 
     const updatedChat = await Chat.findOne({ chatId })
@@ -584,6 +591,7 @@ exports.transferGroupOwnership = async (req, res) => {
           chatId,
           newCreatorId,
           oldCreatorId: userId,
+          groupName: chat.groupName || updatedChat.groupName || 'Nhóm chat',
           chat: updatedChat,
         });
       }

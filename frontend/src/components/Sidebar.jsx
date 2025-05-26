@@ -34,6 +34,9 @@ const Sidebar = () => {
     }
   }, [error, chats, onlineUsers, selectedChat]);
 
+  useEffect(() => {
+    console.log("Danh sách chats thay đổi, cập nhật Sidebar:", chats);
+  }, [chats, selectedChat]);
   // Đảm bảo chats và onlineUsers là mảng
   const safeChats = Array.isArray(chats) ? chats : [];
   const safeOnlineUsers = Array.isArray(onlineUsers) ? onlineUsers : [];

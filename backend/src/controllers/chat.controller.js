@@ -33,7 +33,9 @@ exports.sendMessage = async (req, res) => {
     // Kiểm tra chat tồn tại
     let chat = await Chat.findOne({ chatId });
     if (!chat) return res.status(404).json({ message: "Chat không tồn tại." });
-
+    if (chat.isGroupChat && !chat.participants.includes(senderId)) {
+      return res.status(403).json({ message: "Bạn không còn là thành viên của nhóm này" });
+    }
     // Xử lý ảnh (Cloudinary)
     if (req.files && req.files.image) {
       try {
