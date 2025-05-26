@@ -10,8 +10,18 @@ const chatSchema = new mongoose.Schema({
   avatar: { type: String, default: "https://via.placeholder.com/50" },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
-});
-
+  isForwarded: {
+    type: Boolean,
+    default: false
+  },
+  originalMessage: {
+    type: Object,
+    default: null
+  },
+  forwardedFrom: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }}, { timestamps: true });
 
 
 

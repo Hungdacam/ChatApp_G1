@@ -99,16 +99,18 @@ export const useChatStore = create((set, get) => ({
     }
   },
   
-  sendMessage: async ({ chatId, content, image, video }) => {
+  sendMessage: async ({ chatId, content, image, video, isForwarded, originalMessage }) => {
     const tempId = `temp-${Date.now()}`;
     const userId = localStorage.getItem("userId");
     
     const formData = new FormData();
-    formData.append("chatId", chatId);
-    if (content) formData.append("content", content);
-    if (image) formData.append("image", image);
-    if (video) formData.append("video", video);
-    
+  formData.append("chatId", chatId);
+  if (content) formData.append("content", content);
+  if (image) formData.append("image", image);
+  if (video) formData.append("video", video);
+  if (isForwarded) formData.append("isForwarded", isForwarded);
+  if (originalMessage) formData.append("originalMessage", JSON.stringify(originalMessage));
+  
     const tempMessage = {
       messageId: tempId,
       chatId,

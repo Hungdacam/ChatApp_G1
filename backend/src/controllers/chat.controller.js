@@ -9,7 +9,7 @@ const cloudinary = require('../config/cloudinary');
 exports.sendMessage = async (req, res) => {
   try {
     const senderId = req.user?._id;
-    const { chatId, content, receiverId } = req.body;
+    const { chatId, content, receiverId, isForwarded, originalMessage } = req.body;
     let imageUrl = null;
     let videoUrl = null;
 
@@ -65,6 +65,8 @@ exports.sendMessage = async (req, res) => {
       content: contentToSave,
       image: imageUrl,
       video: videoUrl,
+       isForwarded: isForwarded || false,
+      originalMessage: originalMessage || null,
     });
 
     await message.save();

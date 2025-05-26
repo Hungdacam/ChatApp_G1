@@ -95,7 +95,7 @@ const CallPage = () => {
     };
   }, [authUser, callId]); // Giảm số lượng dependencies để tránh re-render không cần thiết
 
-  // Tạo biến isLoading từ các trạng thái loading khác nhau
+
  // Tạo biến isLoading từ các trạng thái loading khác nhau
 const isLoading = isAuthLoading || isStreamLoading || isConnecting;
 
@@ -104,7 +104,7 @@ if (isLoading) return <PageLoader />;
 if (!client || !call) {
   return (
     <div className="h-screen flex flex-col items-center justify-center">
-      <p>Không thể khởi tạo cuộc gọi. Vui lòng làm mới trang hoặc thử lại sau.</p>
+      <p>Người nhận đã từ chối cuộc gọi </p>
       <button 
         className="mt-4 px-4 py-2 bg-blue-500 text-white rounded"
         onClick={() => navigate("/")}

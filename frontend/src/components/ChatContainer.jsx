@@ -6,6 +6,7 @@ import MessageInput from "./MessageInput";
 import MessageSkeleton from "./skeletons/MessageSkeleton";
 import NoChatSelected from "./NoChatSelected";
 import MessageItem from "./MessageItem";
+import ForwardMessageModal from './ForwardMessageModal';
 
 
 const ChatContainer = () => {
