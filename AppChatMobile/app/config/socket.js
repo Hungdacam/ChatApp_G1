@@ -6,7 +6,7 @@ const getServerURL = () => {
   if (Platform.OS === "android") {
     return "http://10.0.2.2:3000"; // Android Emulator
   }
-  return "http://192.168.1.11:3000"; // iOS hoặc thiết bị thực
+  return "http://192.168.1.3:3000"; // iOS hoặc thiết bị thực
 };
 
 const socket = io(getServerURL(), {

@@ -47,16 +47,17 @@ export default function ChatScreen({ route }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [content, setContent] = useState("");
   const [selectedFile, setSelectedFile] = useState<{ name: string; uri: string; mimeType: string } | null>(null);
-  const [avatar, setAvatar] = useState(initialAvatar || "https://via.placeholder.com/50"); // Thêm state cho avatar
+  const [avatar, setAvatar] = useState(initialAvatar || "https://via.placeholder.com/50");
   const flatListRef = useRef<FlatList>(null);
   const [showEmojiModal, setShowEmojiModal] = useState(false);
   const navigation = useNavigation();
   const [visible, setIsVisible] = useState(false);
-const [currentImageIndex, setCurrentImageIndex] = useState(0);
-const [isSending, setIsSending] = useState(false);
-const imageMessages = messages
-  .filter(msg => msg.image)
-  .map(msg => ({ url: msg.image }));
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [isSending, setIsSending] = useState(false);
+  const imageMessages = messages
+    .filter(msg => msg.image)
+    .map(msg => ({ url: msg.image }));
+
   useEffect(() => {
     fetchMessages();
 
@@ -86,14 +87,23 @@ const imageMessages = messages
     socket.on("group_member_removed", fetchMessages);
     socket.on("group_dissolved", () => {
       Alert.alert("Thông báo", "Nhóm đã được giải tán.");
-      navigation.navigate("HomeTabs", { screen: "Inbox", });
+      navigation.navigate("HomeTabs", { screen: "Inbox" });
     });
-
-    // Lắng nghe sự kiện group_avatar_updated
     socket.on("group_avatar_updated", (data: { chatId: string; avatar: string }) => {
       if (data.chatId === chatId) {
-        console.log("Received group_avatar_updated:", data); 
         setAvatar(data.avatar ? `${data.avatar}?t=${Date.now()}` : "https://via.placeholder.com/50");
+      }
+    });
+    socket.on("group_ownership_transferred", (data: { chatId: string; newCreatorId: string }) => {
+      if (data.chatId === chatId) {
+        Alert.alert("Thông báo", "Quyền trưởng nhóm đã được chuyển.");
+        fetchMessages();
+      }
+    });
+    socket.on("left_group", (data: { chatId: string; groupName: string }) => {
+      if (data.chatId === chatId) {
+        Alert.alert("Thông báo", `Bạn đã rời khỏi nhóm ${data.groupName}.`);
+        navigation.navigate("HomeTabs", { screen: "Inbox" });
       }
     });
 
@@ -104,6 +114,8 @@ const imageMessages = messages
       socket.off("group_member_removed");
       socket.off("group_dissolved");
       socket.off("group_avatar_updated");
+      socket.off("group_ownership_transferred");
+      socket.off("left_group");
     };
   }, [chatId]);
 
@@ -123,14 +135,13 @@ const imageMessages = messages
       let allMessages = response.data.sort(
         (a: Message, b: Message) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
       );
-  
-      // Lọc những tin nhắn đã bị ẩn
+
       const hidden = await AsyncStorage.getItem("hiddenMessages");
       const hiddenList = hidden ? JSON.parse(hidden) : [];
       const filteredMessages = allMessages.filter(
         (msg: Message) => !hiddenList.includes(msg.messageId)
       );
-  
+
       setMessages(filteredMessages);
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
@@ -244,8 +255,9 @@ const imageMessages = messages
       Alert.alert("Lỗi", "Không thể chọn tệp.");
     }
   };
+
   const sendMessage = async () => {
-    if (isSending) return; // Ngăn gửi nhiều lần
+    if (isSending) return;
     setIsSending(true);
 
     try {
@@ -266,7 +278,6 @@ const imageMessages = messages
           name: selectedFile.name || `file-${Date.now()}`,
         };
 
-        // Gửi tất cả qua endpoint /send
         if (selectedFile.mimeType.startsWith("image/")) {
           formData.append("image", file);
           formData.append("content", "[Image]");
@@ -285,7 +296,7 @@ const imageMessages = messages
           },
         });
 
-        setSelectedFile(null); // Xóa tệp sau khi gửi
+        setSelectedFile(null);
       } else if (content.trim()) {
         await axios.post(
           `${BASE_URL}/api/chat/send`,
@@ -356,28 +367,28 @@ const imageMessages = messages
       Alert.alert("Lỗi", "Không thể thu hồi tin nhắn.");
     }
   };
+
   const deleteMessageLocally = async (messageId: string) => {
     try {
-      // Lưu messageId vào AsyncStorage
       const hidden = await AsyncStorage.getItem("hiddenMessages");
       const hiddenList = hidden ? JSON.parse(hidden) : [];
-  
+
       if (!hiddenList.includes(messageId)) {
         hiddenList.push(messageId);
         await AsyncStorage.setItem("hiddenMessages", JSON.stringify(hiddenList));
       }
-  
-      // Cập nhật lại messages để ẩn khỏi giao diện
+
       setMessages((prev) => prev.filter((msg) => msg.messageId !== messageId));
     } catch (error) {
       console.error("Lỗi khi ẩn tin nhắn:", error);
       Alert.alert("Lỗi", "Không thể xoá tin nhắn khỏi giao diện.");
     }
   };
+
   const renderMessage = ({ item }: { item: Message }) => {
     const isRecalled = item.isRecalled || item.content === "Tin nhắn đã được thu hồi";
     const isCurrentUser = item.senderId._id === currentUserId;
-  
+
     const handleLongPress = () => {
       if (isCurrentUser && !isRecalled) {
         Alert.alert(
@@ -394,7 +405,7 @@ const imageMessages = messages
         );
       }
     };
-  
+
     return (
       <TouchableOpacity onLongPress={handleLongPress}>
         <View
@@ -403,14 +414,12 @@ const imageMessages = messages
             { alignSelf: isCurrentUser ? "flex-end" : "flex-start" },
           ]}
         >
-          {/* Avatar và nội dung tin nhắn */}
           <View
             style={[
               styles.messageRow,
               { flexDirection: isCurrentUser ? "row-reverse" : "row" },
             ]}
           >
-            {/* Avatar */}
             {!isCurrentUser && (
               <Image
                 source={{
@@ -419,8 +428,6 @@ const imageMessages = messages
                 style={styles.messageAvatar}
               />
             )}
-  
-            {/* Nội dung tin nhắn */}
             <View
               style={[
                 styles.messageContent,
@@ -431,12 +438,9 @@ const imageMessages = messages
                 },
               ]}
             >
-              {/* Tên người gửi (hiển thị trong group chat hoặc nếu cần) */}
               {isGroupChat && !isCurrentUser && !isRecalled && (
                 <Text style={styles.senderName}>{item.senderId.name}</Text>
               )}
-  
-              {/* Nội dung tin nhắn */}
               {isRecalled ? (
                 <Text
                   style={[
@@ -506,8 +510,6 @@ const imageMessages = messages
                   {item.content}
                 </Text>
               )}
-  
-              {/* Thời gian và trạng thái */}
               <View style={styles.messageFooter}>
                 <Text style={[styles.messageTime, { color: isCurrentUser ? "#ddd" : "#888" }]}>
                   {new Date(item.createdAt).toLocaleTimeString()}
@@ -543,7 +545,7 @@ const imageMessages = messages
       >
         <View style={styles.header}>
           <Image
-            source={{ uri: avatar || "https://via.placeholder.com/50" }} // Sử dụng state avatar
+            source={{ uri: avatar || "https://via.placeholder.com/50" }}
             style={styles.headerAvatar}
           />
           <Text style={styles.headerText}>{name}</Text>
@@ -622,27 +624,24 @@ const imageMessages = messages
           />
         )}
       </KeyboardAvoidingView>
-    
-      {visible && (
-  <Modal
-    isVisible={visible}
-    onBackdropPress={() => setIsVisible(false)}
-    onBackButtonPress={() => setIsVisible(false)}
-    style={{ margin: 0 }}
-  >
-    
-    <ImageViewer
-      imageUrls={imageMessages}
-      index={currentImageIndex}
-      onSwipeDown={() => setIsVisible(false)}
-      enableSwipeDown
-      onCancel={() => setIsVisible(false)}
-      saveToLocalByLongPress={false}
-     
-    />
-  </Modal>
-)}
 
+      {visible && (
+        <Modal
+          isVisible={visible}
+          onBackdropPress={() => setIsVisible(false)}
+          onBackButtonPress={() => setIsVisible(false)}
+          style={{ margin: 0 }}
+        >
+          <ImageViewer
+            imageUrls={imageMessages}
+            index={currentImageIndex}
+            onSwipeDown={() => setIsVisible(false)}
+            enableSwipeDown
+            onCancel={() => setIsVisible(false)}
+            saveToLocalByLongPress={false}
+          />
+        </Modal>
+      )}
     </SafeAreaView>
   );
 }
@@ -722,10 +721,10 @@ const styles = StyleSheet.create({
   },
   messageContainer: {
     marginBottom: 10,
-    maxWidth: "80%", // Tăng maxWidth để chứa avatar
+    maxWidth: "80%",
   },
   messageRow: {
-    alignItems: "flex-end", // Căn chỉnh avatar và nội dung
+    alignItems: "flex-end",
   },
   messageAvatar: {
     width: 30,
@@ -736,7 +735,7 @@ const styles = StyleSheet.create({
   messageContent: {
     padding: 10,
     borderRadius: 10,
-    maxWidth: "100%", // Đảm bảo nội dung tin nhắn không vượt quá container
+    maxWidth: "100%",
   },
   senderName: {
     fontSize: 12,
