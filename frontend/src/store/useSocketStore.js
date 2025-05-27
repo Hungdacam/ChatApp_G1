@@ -556,7 +556,10 @@ socket.on("admin_assigned", (data) => {
     const updatedChat = {
       ...data.chat,
       isGroupChat: true,
-      chatId: data.chatId
+      chatId: data.chatId,
+      // ✅ Đảm bảo tên nhóm được giữ nguyên
+      groupName: data.chat.groupName || data.groupName,
+      name: data.chat.groupName || data.groupName
     };
 
     const updatedChats = chats.map(chat =>

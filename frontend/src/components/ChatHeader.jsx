@@ -33,7 +33,7 @@ const ChatHeader = () => {
             className="w-10 h-10 rounded-full mr-3"
           />
           <div>
-          <h3 className="font-medium">{selectedChat.name || 'Nhóm chat'}</h3>
+          <h3 className="font-medium">{selectedChat.groupName || selectedChat.name}</h3>
             <p className="text-sm text-gray-500">{selectedChat.participants.length} thành viên</p>
           </div>
         </div>

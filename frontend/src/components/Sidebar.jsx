@@ -82,7 +82,7 @@ const Sidebar = () => {
     }
     if (chat.isGroupChat) {
       return {
-        name: chat.name || "Nhóm chat",
+        name: chat.groupName || chat.name || "Nhóm chat",
         avatar: chat.avatar || "/group-avatar.png",
         isOnline: false // Nhóm không có trạng thái online
       };
