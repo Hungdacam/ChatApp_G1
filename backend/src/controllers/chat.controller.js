@@ -321,9 +321,9 @@ exports.getChatDetails = async (req, res) => {
       return res.status(404).json({ message: "Nhóm không tồn tại hoặc bạn không phải thành viên" });
     }
 
-    // Lấy danh sách admin và creator
-    const admins = chat.admins.map((adminId) => adminId.toString());
-    const createdBy = chat.createdBy.toString();
+    // Lấy danh sách admin và creator với kiểm tra null/undefined
+    const admins = chat.admins ? chat.admins.map((adminId) => adminId.toString()) : [];
+    const createdBy = chat.createdBy ? chat.createdBy.toString() : null;
 
     res.status(200).json({
       chatId: chat.chatId,

@@ -1,12 +1,12 @@
 const express = require('express');
 const authRoutes = require('./routes/auth.route');
-const messageRoutes = require('./routes/message.route');
 const friendRoutes = require('./routes/friends.route');
 const chatRoutes = require('./routes/chat.route');
 const groupRoutes = require('./routes/group.route');
+const callRoutes = require('./routes/call.route');
 const http = require('http');
 const socketio = require('socket.io');
-
+const StreamCall = require('./models/call.model');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const dotenv = require('dotenv');
@@ -32,10 +32,10 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // 🚀 Đăng ký các route
 app.use('/api/auth', authRoutes);
-app.use('/api/message', messageRoutes);
 app.use("/api/chat", chatRoutes);
 app.use('/api/friends', friendRoutes);
 app.use('/api/group',groupRoutes );
+app.use('/api/stream',callRoutes)
 const server = http.createServer(app);
 
 const io = socketio(server, {
@@ -79,6 +79,105 @@ io.on('connection', (socket) => {
         io.emit("online_users", [...onlineUsers.entries()]);
         console.log("🗺️ Danh sách onlineUsers sau disconnect:", [...onlineUsers.entries()]);
     });
+  socket.on("call_user", async (data) => {
+  console.log("📞 Nhận sự kiện call_user:", data);
+  const { callId, participantIds, chatId, callerId } = data;
+  
+  try {
+    // Lấy thông tin chi tiết của người gọi từ database
+    const User = require('./models/user.model');
+    const callerUser = await User.findById(callerId);
+    
+    // Tạo đối tượng caller với thông tin thực tế
+    const caller = {
+      _id: callerId,
+      name: callerUser?.name || "Người dùng",
+      avatar: callerUser?.avatar || "/avatar.png"
+    };
+    
+    // Gửi thông báo đến tất cả người tham gia
+    participantIds.forEach(userId => {
+      console.log(`📲 Gửi thông báo cuộc gọi đến user ${userId}`);
+      // Tìm socket của người dùng đích
+      const targetSocketId = findUserSocket(userId);
+      if (targetSocketId) {
+        console.log(`✅ Đã tìm thấy socket của user ${userId}, gửi thông báo`);
+        io.to(targetSocketId).emit("incoming_call", {
+          callId,
+          caller
+        });
+      } else {
+        console.log(`❌ Không tìm thấy socket của user ${userId}`);
+      }
+    });
+  } catch (error) {
+    console.error("Lỗi khi xử lý cuộc gọi:", error);
+  }
+});
+// Xử lý khi người dùng kết thúc cuộc gọi
+socket.on("end_call", (data) => {
+  console.log("📞 Nhận sự kiện end_call:", data);
+  const { callId } = data;
+  
+  // Tìm cuộc gọi trong database
+  StreamCall.findOne({ callId })
+    .then(call => {
+      if (call) {
+        // Cập nhật trạng thái cuộc gọi
+        call.status = 'ended';
+        call.endTime = new Date();
+        call.duration = Math.floor((call.endTime - call.startTime) / 1000);
+        call.save();
+        
+        // Thông báo cho tất cả người tham gia
+        call.participants.forEach(userId => {
+          const targetSocketId = findUserSocket(userId.toString());
+          if (targetSocketId) {
+            console.log(`📤 Gửi thông báo call_ended đến user ${userId}`);
+            io.to(targetSocketId).emit("call_ended", { callId });
+          }
+        });
+      } else {
+        console.log("⚠️ Không tìm thấy cuộc gọi với ID:", callId);
+      }
+    })
+    .catch(err => console.error("Lỗi khi tìm cuộc gọi:", err));
+});
+
+// Xử lý khi người dùng từ chối cuộc gọi
+socket.on("reject_call", (data) => {
+  console.log("📞 Nhận sự kiện reject_call:", data);
+  const { callId, callerId } = data;
+  // Thông báo cho người gọi
+  if (callerId) {
+    const callerSocketId = findUserSocket(callerId);
+    if (callerSocketId) {
+      console.log(`📤 Gửi thông báo call_rejected đến người gọi ${callerId}`);
+      io.to(callerSocketId).emit("call_rejected", {
+        callId,
+        message: "Cuộc gọi đã bị từ chối"
+      });
+    } else {
+      console.log(`❌ Không tìm thấy socket của người gọi ${callerId}`);
+    }
+  }
+  
+  // Cập nhật trạng thái cuộc gọi trong database
+  StreamCall.findOne({ callId })
+    .then(call => {
+      if (call) {
+        call.status = 'missed';
+        call.endTime = new Date();
+        call.save();
+      }
+    })
+    .catch(err => console.error("Lỗi khi cập nhật trạng thái cuộc gọi:", err));
+}); 
+
+
+function findUserSocket(userId) {
+  return onlineUsers.get(userId);
+}
 });
 
 app.set('io', io);
