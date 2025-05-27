@@ -13,7 +13,7 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const dotenv = require('dotenv');
 const { connectDB } = require('./config/database');
-
+const contactRoutes = require('./routes/contact.route');
 const PORT = 3000;
 const app = express();
 
@@ -38,7 +38,8 @@ app.use('/api/message', messageRoutes);
 app.use("/api/chat", chatRoutes);
 app.use('/api/friends', friendRoutes);
 app.use('/api/group',groupRoutes );
-app.use('/api/stream',callRoutes)
+app.use('/api/stream',callRoutes);
+app.use('/api/contacts', contactRoutes);
 const server = http.createServer(app);
 
 const io = socketio(server, {

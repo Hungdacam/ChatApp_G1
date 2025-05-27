@@ -57,11 +57,26 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-facebook",
-      "expo-font"
       
+      "expo-facebook",
+      "expo-font",
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Cho phép ứng dụng truy cập danh bạ để kết nối với bạn bè."
+        }
+      ]
+    
       
     ],
+    "ios": {
+      "infoPlist": {
+        "NSContactsUsageDescription": "Cho phép ứng dụng truy cập danh bạ để kết nối với bạn bè."
+      }
+    },
+    "android": {
+      "permissions": ["android.permission.READ_CONTACTS"]
+    },
     "permissions": [
       "CAMERA",
       "RECORD_AUDIO",

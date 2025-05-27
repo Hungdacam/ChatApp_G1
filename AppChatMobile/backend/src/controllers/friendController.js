@@ -203,6 +203,7 @@ exports.canSendMessage = async (req, res) => {
     res.status(500).json({ message: 'Lỗi server' });
   }
 };
+
 exports.rejectFriendRequest = async (req, res) => {
   const receiverId = req.user._id; // Người nhận lời mời (User B)
   const { senderId } = req.body; // Người gửi lời mời (User A)
@@ -236,12 +237,12 @@ exports.rejectFriendRequest = async (req, res) => {
     res.status(500).json({ message: 'Lỗi server', error: error.message });
   }
 };
+
 exports.unfriend = async (req, res) => {
   const userId1 = req.user._id;
-  const { friendId: userId2  } = req.body;
+  const { friendId: userId2 } = req.body;
 
   try {
-
     const deleted = await Friendship.findOneAndDelete({
       $or: [
         { userId1, userId2, status: 'accepted' },
@@ -257,5 +258,44 @@ exports.unfriend = async (req, res) => {
   } catch (error) {
     console.error('Lỗi hủy kết bạn:', error.message);
     res.status(500).json({ message: 'Lỗi server' });
+  }
+};
+
+exports.checkContacts = async (req, res) => {
+  const { phoneNumbers } = req.body;
+  const userId = req.user._id;
+
+  try {
+    if (!phoneNumbers || !Array.isArray(phoneNumbers) || phoneNumbers.length === 0) {
+      return res.status(400).json({ message: 'Danh sách số điện thoại không hợp lệ' });
+    }
+
+    // Tìm người dùng có số điện thoại trong danh sách và không phải chính người gửi
+    const registeredUsers = await User.find({
+      phone: { $in: phoneNumbers },
+      _id: { $ne: userId },
+    }).select('_id name avatar phone');
+
+    // Kiểm tra xem đã là bạn bè hoặc đã gửi lời mời chưa
+    const friendships = await Friendship.find({
+      $or: [
+        { userId1: userId, userId2: { $in: registeredUsers.map(u => u._id) } },
+        { userId2: userId, userId1: { $in: registeredUsers.map(u => u._id) } },
+      ],
+    });
+
+    const friendIds = friendships.map(f =>
+      f.userId1.toString() === userId.toString() ? f.userId2.toString() : f.userId1.toString()
+    );
+
+    // Lọc ra những người dùng chưa là bạn bè và chưa có lời mời
+    const availableUsers = registeredUsers.filter(
+      user => !friendIds.includes(user._id.toString())
+    );
+
+    res.status(200).json({ registeredUsers: availableUsers });
+  } catch (error) {
+    console.error('Lỗi kiểm tra danh bạ:', error);
+    res.status(500).json({ message: 'Lỗi server', error: error.message });
   }
 };
