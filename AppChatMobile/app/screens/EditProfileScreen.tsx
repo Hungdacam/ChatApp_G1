@@ -14,6 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import * as ImagePicker from 'expo-image-picker';
 import { BASE_URL } from "../config/config";
+import styles from '../style/EditProfileStyle'; 
 const EditProfileScreen = ({ route, navigation }) => {
   const { userInfo } = route.params;
 
@@ -219,100 +220,5 @@ const EditProfileScreen = ({ route, navigation }) => {
     </SafeAreaView>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 20,
-    backgroundColor: '#fff',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginTop: 20,
-    marginBottom: 30,
-    textAlign: 'center',
-  },
-  label: {
-    fontSize: 16,
-    marginBottom: 5,
-    color: '#333',
-    paddingLeft: 30,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 10,
-    padding: 10,
-    fontSize: 16,
-    marginBottom: 15,
-    backgroundColor: '#f9f9f9',
-    width: '83%',
-    marginLeft: 30,
-  },
-  genderContainer: {
-    flexDirection: 'row',
-    marginBottom: 15,
-    width: '80%',
-    marginLeft: 30,
-  },
-  genderOption: {
-    flex: 1,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 10,
-    alignItems: 'center',
-    marginHorizontal: 5,
-    backgroundColor: '#f9f9f9',
-  },
-  genderOptionSelected: {
-    borderColor: '#4A90E2',
-    backgroundColor: '#e0f7ff',
-  },
-  genderText: {
-    fontSize: 16,
-    color: '#333',
-  },
-  genderTextSelected: {
-    color: '#4A90E2',
-    fontWeight: 'bold',
-  },
-  button: {
-    backgroundColor: '#4A90E2',
-    padding: 15,
-    borderRadius: 10,
-    alignItems: 'center',
-    marginBottom: 15,
-    width: '83%',
-    marginLeft: 30,
-    shadowColor: '#000',
-    marginTop: 20,
-  },
-  secondaryButton: {
-    backgroundColor: '#FF6347',
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  avatarButton: {
-    backgroundColor: '#FF6347',
-    padding: 10,
-    borderRadius: 5,
-    alignItems: 'center',
-    marginTop: 10,
-    marginBottom: 20,
-  },
-  avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    marginTop: 10,
-    alignSelf: 'center',
-    marginBottom: 20,
-  },
-});
 
 export default EditProfileScreen;

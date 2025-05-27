@@ -32,7 +32,7 @@ export default function Home() {
       socket.on("new_group_created", fetchChats);
       socket.on("group_dissolved", fetchChats);
       socket.on("group_avatar_updated", fetchChats);
-      socket.on("left_group", fetchChats); // Thêm sự kiện left_group
+      socket.on("left_group", fetchChats); 
       return () => {
         socket.off("new_message", fetchChats);
         socket.off("new_group_created", fetchChats);

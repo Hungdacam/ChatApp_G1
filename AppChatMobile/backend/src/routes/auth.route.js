@@ -12,7 +12,8 @@ const {
   verifyForgotPasswordOTP,
   resetPassword,
   updateUserImg,
-  getUsers
+  getUsers,
+  getUserById
 } = require("../controllers/auth.controller");
 
 const protectRoute = require("../middleware/auth.middleware");
@@ -50,4 +51,5 @@ router.post("/find-user-by-phone", protectRoute, findByPhone);
 
 // 📌 Lấy danh sách người dùng
 router.get("/users", protectRoute, getUsers);
+router.get("/user/:userId", protectRoute, getUserById);
 module.exports = router;

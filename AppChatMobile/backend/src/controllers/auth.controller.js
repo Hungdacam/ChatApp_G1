@@ -419,6 +419,23 @@ const getUsers = async (req, res) => {
     res.status(500).json({ message: "Lỗi server", error: error.message });
   }
 };
+const getUserById = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const user = await User.findById(userId).select("_id name phone email avatar dob gender");
+
+    if (!user) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng." });
+    }
+
+    res.status(200).json(user);
+  } catch (error) {
+    console.error("Lỗi lấy thông tin người dùng:", error);
+    res.status(500).json({ message: "Lỗi server", error: error.message });
+  }
+};
+
+  
 module.exports = {
   sendSignupOTP,
   verifyAndSignup,
@@ -432,5 +449,6 @@ module.exports = {
   verifyForgotPasswordOTP,
   sendForgotPasswordOTP,
   updateUserImg,
-  getUsers
+  getUsers,
+  getUserById, // Thêm hàm mới
 };

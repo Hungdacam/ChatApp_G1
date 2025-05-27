@@ -299,3 +299,39 @@ exports.checkContacts = async (req, res) => {
     res.status(500).json({ message: 'Lỗi server', error: error.message });
   }
 };
+
+exports.checkFriendStatus = async (req, res) => {
+  const userId = req.user._id;
+  const { targetUserId } = req.body;
+
+  try {
+    if (!targetUserId) {
+      return res.status(400).json({ message: 'Thiếu ID người dùng mục tiêu' });
+    }
+
+    const friendship = await Friendship.findOne({
+      $or: [
+        { userId1: userId, userId2: targetUserId },
+        { userId1: targetUserId, userId2: userId },
+      ],
+    });
+
+    if (!friendship) {
+      return res.status(200).json({ status: 'none' });
+    }
+
+    if (friendship.status === 'accepted') {
+      return res.status(200).json({ status: 'friends' });
+    }
+
+    if (friendship.status === 'pending') {
+      return res.status(200).json({
+        status: 'pending',
+        isSender: friendship.userId1.toString() === userId.toString(),
+      });
+    }
+  } catch (error) {
+    console.error('Lỗi kiểm tra trạng thái bạn bè:', error);
+    res.status(500).json({ message: 'Lỗi server', error: error.message });
+  }
+};

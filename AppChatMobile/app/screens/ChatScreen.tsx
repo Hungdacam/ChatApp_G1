@@ -26,8 +26,8 @@ import { useNavigation } from "@react-navigation/native";
 import Modal from "react-native-modal";
 import ImageViewer from "react-native-image-zoom-viewer";
 import { Video, ResizeMode } from "expo-av";
-import { WebView } from "react-native-webview"; // Thêm import WebView
-
+import { WebView } from "react-native-webview"; 
+import styles from "../style/ChatScreenStyle";
 interface Message {
   messageId: string;
   chatId: string;
@@ -605,176 +605,194 @@ const fetchGroupDetails = async () => {
   };
 
   const renderMessage = ({ item }: { item: Message }) => {
-    const isRecalled = item.isRecalled || item.content === "Tin nhắn đã được thu hồi";
-    const isCurrentUser = item.senderId._id === currentUserId;
+  const isRecalled = item.isRecalled || item.content === "Tin nhắn đã được thu hồi";
+  const isCurrentUser = item.senderId._id === currentUserId;
 
-    const handleLongPress = () => {
-      const buttons = [];
+  const handleLongPress = () => {
+    const buttons = [];
 
-      buttons.push({ text: "Hủy", style: "cancel" });
+    buttons.push({ text: "Hủy", style: "cancel" });
+    buttons.push({
+      text: "Xóa tin nhắn",
+      onPress: () => deleteMessageLocally(item.messageId),
+      style: "destructive",
+    });
+
+    if (isCurrentUser && !isRecalled) {
       buttons.push({
-        text: "Xóa tin nhắn",
-        onPress: () => deleteMessageLocally(item.messageId),
+        text: "Thu hồi",
+        onPress: () => recallMessage(item.messageId),
         style: "destructive",
       });
+    }
 
-      if (isCurrentUser && !isRecalled) {
-        buttons.push({
-          text: "Thu hồi",
-          onPress: () => recallMessage(item.messageId),
-          style: "destructive",
-        });
-      }
+    if (!isRecalled) {
+      buttons.push({
+        text: "Chuyển tiếp",
+        onPress: () => {
+          setSelectedMessage(item);
+          setForwardModalVisible(true);
+        },
+        style: "default",
+      });
+    }
 
-      if (!isRecalled) {
-        buttons.push({
-          text: "Chuyển tiếp",
-          onPress: () => {
-            setSelectedMessage(item);
-            setForwardModalVisible(true);
-          },
-          style: "default",
-        });
-      }
+    if (buttons.length > 3 && Platform.OS === "android") {
+      const moreButtons = buttons.splice(2, buttons.length - 2);
+      buttons.push({
+        text: "Thêm",
+        onPress: () => {
+          Alert.alert(
+            "Tùy chọn tin nhắn",
+            "Chọn hành động khác:",
+            [{ text: "Hủy", style: "cancel" }, ...moreButtons]
+          );
+        },
+        style: "default",
+      });
+    }
 
-      if (buttons.length > 3 && Platform.OS === "android") {
-        const moreButtons = buttons.splice(2, buttons.length - 2);
-        buttons.push({
-          text: "Thêm",
-          onPress: () => {
-            Alert.alert(
-              "Tùy chọn tin nhắn",
-              "Chọn hành động khác:",
-              [{ text: "Hủy", style: "cancel" }, ...moreButtons]
-            );
-          },
-          style: "default",
-        });
-      }
+    Alert.alert("Tùy chọn tin nhắn", "Chọn hành động cho tin nhắn này:", buttons);
+  };
 
-      Alert.alert("Tùy chọn tin nhắn", "Chọn hành động cho tin nhắn này:", buttons);
-    };
-
-    return (
-      <TouchableOpacity onLongPress={handleLongPress}>
+  return (
+    <TouchableOpacity onLongPress={handleLongPress}>
+      <View
+        style={[
+          styles.messageContainer,
+          { alignSelf: isCurrentUser ? "flex-end" : "flex-start" },
+        ]}
+      >
         <View
           style={[
-            styles.messageContainer,
-            { alignSelf: isCurrentUser ? "flex-end" : "flex-start" },
+            styles.messageRow,
+            { flexDirection: isCurrentUser ? "row-reverse" : "row" },
           ]}
         >
+          {!isCurrentUser && (
+            <Image
+              source={{
+                uri: item.senderId.avatar || "https://via.placeholder.com/30",
+              }}
+              style={styles.messageAvatar}
+            />
+          )}
           <View
             style={[
-              styles.messageRow,
-              { flexDirection: isCurrentUser ? "row-reverse" : "row" },
+              styles.messageContent,
+              {
+                backgroundColor: isCurrentUser ? "#007AFF" : "#f0f0f0",
+                borderTopLeftRadius: isCurrentUser ? 10 : 0,
+                borderTopRightRadius: isCurrentUser ? 0 : 10,
+              },
             ]}
           >
-            {!isCurrentUser && (
-              <Image
-                source={{
-                  uri: item.senderId.avatar || "https://via.placeholder.com/30",
-                }}
-                style={styles.messageAvatar}
-              />
+            {isGroupChat && !isCurrentUser && !isRecalled && (
+              <Text style={styles.senderName}>{item.senderId.name}</Text>
             )}
-            <View
-              style={[
-                styles.messageContent,
-                {
-                  backgroundColor: isCurrentUser ? "#007AFF" : "#f0f0f0",
-                  borderTopLeftRadius: isCurrentUser ? 10 : 0,
-                  borderTopRightRadius: isCurrentUser ? 0 : 10,
-                },
-              ]}
-            >
-              {isGroupChat && !isCurrentUser && !isRecalled && (
-                <Text style={styles.senderName}>{item.senderId.name}</Text>
-              )}
-              {isRecalled ? (
-                <Text
-                  style={[
-                    styles.messageText,
-                    { color: isCurrentUser ? "#fff" : "#333", fontStyle: "italic" },
-                  ]}
-                >
-                  Tin nhắn đã được thu hồi
-                </Text>
-              ) : item.image ? (
-                <TouchableOpacity
-                  onPress={() => {
-                    const index = imageMessages.findIndex(
-                      (img) => img.url === item.image
+            {isRecalled ? (
+              <Text
+                style={[
+                  styles.messageText,
+                  { color: isCurrentUser ? "#fff" : "#333", fontStyle: "italic" },
+                ]}
+              >
+                Tin nhắn đã được thu hồi
+              </Text>
+            ) : item.image ? (
+              <TouchableOpacity
+                onPress={() => {
+                  const index = imageMessages.findIndex(
+                    (img) => img.url === item.image
+                  );
+                  setCurrentImageIndex(index);
+                  setIsVisible(true);
+                }}
+              >
+                <Image
+                  source={{ uri: item.image }}
+                  style={styles.messageImage}
+                  resizeMode="cover"
+                  onError={(error) =>
+                    console.log("Image load error:", error.nativeEvent)
+                  }
+                />
+              </TouchableOpacity>
+            ) : item.video ? (
+              <Video
+                source={{ uri: item.video }}
+                style={styles.messageVideo}
+                useNativeControls
+                resizeMode={ResizeMode.CONTAIN}
+                isLooping={false}
+                onError={(error) => console.log("Video load error:", error)}
+              />
+            ) : item.fileUrl ? (
+              <TouchableOpacity
+                onPress={() => {
+                  if (item.fileUrl) {
+                    Linking.openURL(item.fileUrl).catch((err) =>
+                      Alert.alert("Lỗi", "Không thể mở tệp.")
                     );
-                    setCurrentImageIndex(index);
-                    setIsVisible(true);
-                  }}
+                  }
+                }}
+              >
+                <View
+                  style={[
+                    styles.filePreviewContainer,
+                    { backgroundColor: isCurrentUser ? "#005bb5" : "#e0e0e0" },
+                  ]}
                 >
                   <Image
-                    source={{ uri: item.image }}
-                    style={styles.messageImage}
-                    resizeMode="cover"
-                    onError={(error) =>
-                      console.log("Image load error:", error.nativeEvent)
-                    }
+                    source={{ uri: "https://via.placeholder.com/40?text=PDF" }} // Biểu tượng PDF tạm thời
+                    style={styles.filePreviewIcon}
                   />
-                </TouchableOpacity>
-              ) : item.video ? (
-                <Video
-                  source={{ uri: item.video }}
-                  style={styles.messageVideo}
-                  useNativeControls
-                  resizeMode={ResizeMode.CONTAIN}
-                  isLooping={false}
-                  onError={(error) => console.log("Video load error:", error)}
-                />
-              ) : item.fileUrl ? (
-                <TouchableOpacity
-                  onPress={() => {
-                    if (item.fileUrl) {
-                      Linking.openURL(item.fileUrl).catch((err) =>
-                        Alert.alert("Lỗi", "Không thể mở tệp.")
-                      );
-                    }
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.messageText,
-                      {
-                        color: isCurrentUser ? "#fff" : "#333",
-                        textDecorationLine: "underline",
-                      },
-                    ]}
-                  >
-                    Tệp: {item.fileName}
-                  </Text>
-                </TouchableOpacity>
-              ) : (
-                <Text
-                  style={[
-                    styles.messageText,
-                    { color: isCurrentUser ? "#fff" : "#333" },
-                  ]}
-                >
-                  {item.content}
+                  <View style={styles.fileInfo}>
+                    <Text
+                      style={[
+                        styles.fileNameText,
+                        { color: isCurrentUser ? "#fff" : "#333" },
+                      ]}
+                    >
+                      {decodeURIComponent(item.fileName || "Unknown.pdf").split('/').pop() || "Unknown.pdf"}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.fileDetails,
+                        { color: isCurrentUser ? "#ddd" : "#888" },
+                      ]}
+                    >
+                      PDF - {Math.round((item.fileUrl?.length || 0) / 1024)} KB
+                    </Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            ) : (
+              <Text
+                style={[
+                  styles.messageText,
+                  { color: isCurrentUser ? "#fff" : "#333" },
+                ]}
+              >
+                {item.content}
+              </Text>
+            )}
+            <View style={styles.messageFooter}>
+              <Text style={[styles.messageTime, { color: isCurrentUser ? "#ddd" : "#888" }]}>
+                {new Date(item.createdAt).toLocaleTimeString()}
+              </Text>
+              {isCurrentUser && !isRecalled && (
+                <Text style={styles.messageStatus}>
+                  {item.isRead ? "Đã đọc" : item.isDelivered ? "Đã gửi" : "Đang gửi"}
                 </Text>
               )}
-              <View style={styles.messageFooter}>
-                <Text style={[styles.messageTime, { color: isCurrentUser ? "#ddd" : "#888" }]}>
-                  {new Date(item.createdAt).toLocaleTimeString()}
-                </Text>
-                {isCurrentUser && !isRecalled && (
-                  <Text style={styles.messageStatus}>
-                    {item.isRead ? "Đã đọc" : item.isDelivered ? "Đã gửi" : "Đang gửi"}
-                  </Text>
-                )}
-              </View>
             </View>
           </View>
         </View>
-      </TouchableOpacity>
-    );
-  };
+      </View>
+    </TouchableOpacity>
+  );
+};
 
   const handleShowEmoji = () => {
     setShowEmojiModal((prev) => !prev);
@@ -793,41 +811,54 @@ const fetchGroupDetails = async () => {
         keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
       >
         <View style={styles.header}>
-          <Image
-            source={{ uri: avatar || "https://via.placeholder.com/50" }}
-            style={styles.headerAvatar}
-          />
-          <Text style={styles.headerText}>{name}</Text>
-          {isGroupChat ? (
-            <TouchableOpacity
-              onPress={() => createCall(true)}
-              style={{ marginLeft: "auto" }}
-            >
-              <Ionicons name="videocam-outline" size={24} color="#007AFF" />
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              onPress={() => createCall(false)}
-              style={{ marginLeft: "auto" }}
-            >
-              <Ionicons name="videocam-outline" size={24} color="#007AFF" />
-            </TouchableOpacity>
-          )}
-          {isGroupChat && (
-            <TouchableOpacity
-              onPress={() =>
-                navigation.navigate("GroupManagement", {
-                  chatId,
-                  groupName: name,
-                  currentUserId,
-                })
-              }
-              style={{ marginLeft: 10 }}
-            >
-              <Ionicons name="settings-outline" size={24} color="#007AFF" />
-            </TouchableOpacity>
-          )}
-        </View>
+  <Image
+    source={{ uri: avatar || "https://via.placeholder.com/50" }}
+    style={styles.headerAvatar}
+  />
+  <TouchableOpacity
+    onPress={() =>
+      navigation.navigate("ChatInfoScreen", {
+        chatId,
+        name,
+        avatar,
+        isGroupChat,
+        currentUserId,
+        receiverId,
+      })
+    }
+  >
+    <Text style={styles.headerText}>{name}</Text>
+  </TouchableOpacity>
+  {isGroupChat ? (
+    <TouchableOpacity
+      onPress={() => createCall(true)}
+      style={{ marginLeft: "auto" }}
+    >
+      <Ionicons name="videocam-outline" size={24} color="#007AFF" />
+    </TouchableOpacity>
+  ) : (
+    <TouchableOpacity
+      onPress={() => createCall(false)}
+      style={{ marginLeft: "auto" }}
+    >
+      <Ionicons name="videocam-outline" size={24} color="#007AFF" />
+    </TouchableOpacity>
+  )}
+  {isGroupChat && (
+    <TouchableOpacity
+      onPress={() =>
+        navigation.navigate("GroupManagement", {
+          chatId,
+          groupName: name,
+          currentUserId,
+        })
+      }
+      style={{ marginLeft: 10 }}
+    >
+      <Ionicons name="settings-outline" size={24} color="#007AFF" />
+    </TouchableOpacity>
+  )}
+</View>
         {activeCallId && streamToken && (
           <View style={styles.callContainer}>
         <WebView
@@ -977,197 +1008,3 @@ const fetchGroupDetails = async () => {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#fff",
-  },
-  container: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 15,
-    borderBottomWidth: 1,
-    borderColor: "#eee",
-  },
-  headerAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 10,
-  },
-  headerText: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#222",
-  },
-  messageList: {
-    flex: 1,
-    paddingHorizontal: 10,
-  },
-  inputContainer: {
-    padding: 10,
-    borderTopWidth: 1,
-    borderColor: "#eee",
-  },
-  inputRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  input: {
-    flex: 1,
-    height: 40,
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 20,
-    padding: 10,
-    marginRight: 10,
-  },
-  iconButton: {
-    padding: 5,
-    marginRight: 5,
-  },
-  emojiModal: {
-    backgroundColor: "#fff",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 10,
-    maxHeight: "50%",
-  },
-  filePreview: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#f0f0f0",
-    padding: 8,
-    borderRadius: 8,
-    marginBottom: 10,
-    width: "100%",
-  },
-  filePreviewText: {
-    flex: 1,
-    color: "#333",
-    flexWrap: "wrap",
-    fontSize: 14,
-  },
-  messageContainer: {
-    marginBottom: 10,
-    maxWidth: "80%",
-  },
-  messageRow: {
-    alignItems: "flex-end",
-  },
-  messageAvatar: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    marginHorizontal: 5,
-  },
-  messageContent: {
-    padding: 10,
-    borderRadius: 10,
-    maxWidth: "100%",
-  },
-  senderName: {
-    fontSize: 12,
-    fontWeight: "bold",
-    color: "#333",
-    marginBottom: 5,
-  },
-  messageText: {
-    fontSize: 14,
-    fontStyle: "normal",
-  },
-  messageImage: {
-    width: 200,
-    height: 200,
-    borderRadius: 10,
-    marginBottom: 5,
-  },
-  messageVideo: {
-    width: 200,
-    height: 200,
-    borderRadius: 10,
-    marginBottom: 5,
-  },
-  messageFooter: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 5,
-  },
-  messageTime: {
-    fontSize: 10,
-    marginRight: 5,
-  },
-  messageStatus: {
-    fontSize: 10,
-    color: "#ddd",
-  },
-  forwardModal: {
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalContent: {
-    backgroundColor: "#fff",
-    borderRadius: 10,
-    padding: 20,
-    width: "80%",
-    maxHeight: "70%",
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 10,
-    textAlign: "center",
-  },
-  chatItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 10,
-    borderBottomWidth: 1,
-    borderColor: "#eee",
-  },
-  chatAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 10,
-  },
-  chatName: {
-    fontSize: 16,
-    color: "#333",
-  },
-  emptyText: {
-    textAlign: "center",
-    color: "#666",
-    padding: 10,
-  },
-  closeButton: {
-    marginTop: 10,
-    padding: 10,
-    backgroundColor: "#007AFF",
-    borderRadius: 5,
-    alignItems: "center",
-  },
-  closeButtonText: {
-    color: "#fff",
-    fontSize: 16,
-  },
-  callContainer: {
-    flex: 1,
-    backgroundColor: "#000",
-  },
-  endCallButton: {
-    backgroundColor: "#ff3b30",
-    padding: 10,
-    borderRadius: 5,
-    alignItems: "center",
-    margin: 10,
-  },
-  endCallButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-});

@@ -13,4 +13,5 @@ router.get('/sent-requests', auth, friendController.getSentFriendRequests);
 router.post('/reject-request', auth, friendController.rejectFriendRequest);
 router.post('/unfriend', auth, friendController.unfriend);
 router.post('/check-contacts', auth, friendController.checkContacts);
+router.post('/check-status', auth, friendController.checkFriendStatus); 
 module.exports = router;

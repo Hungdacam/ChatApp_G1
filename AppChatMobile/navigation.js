@@ -21,7 +21,7 @@ import ChatScreen from './app/screens/ChatScreen';
 import GroupManagement from './app/screens/GroupManagement';
 import AddGroupMember from './app/screens/AddGroupMember';
 import CreateGroup from './app/screens/CreateGroup';
-
+import ChatInfoScreen from './app/screens/ChatInfoScreen';
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
@@ -44,6 +44,7 @@ export default function Navigation({currentUserId}) {
         <Stack.Screen name="GroupManagement" component={GroupManagement} />
         <Stack.Screen name="AddGroupMember" component={AddGroupMember} />
         <Stack.Screen name="CreateGroup" component={CreateGroup} />
+        <Stack.Screen name="ChatInfoScreen" component={ChatInfoScreen} />
       </Stack.Navigator>
    
   );
