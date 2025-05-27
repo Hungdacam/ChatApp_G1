@@ -3,10 +3,18 @@ import { io } from "socket.io-client";
 import { create } from "zustand";
 import { useChatStore } from "./useChatStore";
 import toast from 'react-hot-toast';
+import useCallStore from "./useCallStore";
+
+const saveSocketToWindow = (socket) => {
+  if (typeof window !== 'undefined') {
+    window.socketInstance = socket;
+  }
+  return socket;
+};
 export const useSocketStore = create((set) => ({
   socket: null,
   onlineUsers: [], // Thêm trạng thái onlineUsers
-
+  incomingCall: null,
   connectSocket: (token, userId) => {
     console.log("Đang kết nối socket với token:", token ? "Có token" : "Không có token");
     console.log("userId:", userId);
@@ -21,7 +29,7 @@ export const useSocketStore = create((set) => ({
       transports: ["websocket"],
       auth: { token, userId }, // Gửi token và userId trong auth
     });
-
+    saveSocketToWindow(socket);
     socket.on("connect", () => {
       console.log("✅ Socket connected:", socket.id);
       if (userId) {
@@ -583,6 +591,141 @@ socket.on("admin_assigned", (data) => {
       toast.info(`Bạn đã chuyển quyền trưởng nhóm "${groupName}" cho ${newCreatorName}`);
     } 
   }
+});
+   // Xử lý cuộc gọi đến
+ socket.on("incoming_call", (data) => {
+  console.log("🔔 Cuộc gọi đến:", data);
+  const { callId, caller } = data;
+  
+  // Hiển thị thông báo cuộc gọi đến
+  try {
+    const callStore = useCallStore.getState();
+    console.log("CallStore state trước khi set:", callStore);
+    callStore.setIncomingCall({
+      callId,
+      caller,
+      isActive: true
+    });
+    console.log("CallStore state sau khi set:", useCallStore.getState());
+  } catch (error) {
+    console.error("Lỗi khi xử lý cuộc gọi đến:", error);
+  }
+});
+
+socket.on("call_ended", (data) => {
+  console.log("📞 Cuộc gọi đã kết thúc:", data);
+  const { callId } = data;
+  
+  // Nếu đang trong cuộc gọi này, kết thúc nó
+  const callStore = useCallStore.getState();
+  if (callStore.callId === callId && callStore.call) {
+    toast.info("Cuộc gọi đã kết thúc");
+    
+    // Kết thúc cuộc gọi trên client
+    if (callStore.call) {
+      callStore.call.leave().catch(console.error);
+    }
+    
+    // Reset state
+    callStore.reset();
+    
+    // Chuyển hướng về trang chủ nếu đang ở trang cuộc gọi
+    if (window.location.pathname.includes('/call/')) {
+      window.location.href = '/';
+    }
+  }
+});
+
+
+socket.on("call_rejected", (data) => {
+  console.log("📞 Cuộc gọi bị từ chối:", data);
+  const { callId, message } = data;
+  
+  // Hiển thị thông báo rõ ràng cho người gọi
+  toast(message || "Cuộc gọi đã bị từ chối");
+  
+  // Nếu đang chờ cuộc gọi này, chỉ reset state liên quan đến cuộc gọi
+  const callStore = useCallStore.getState();
+  if (callStore.callId === callId) {
+    // Không gọi reset() vì nó có thể gây ra lỗi
+    // Chỉ cập nhật state cần thiết
+    callStore.setCallState({
+      call: null,
+      callId: null,
+      error: null
+    });
+  }
+});
+ 
+  // Thêm xử lý thông báo group call đến
+  socket.on("incoming_group_call", (data) => {
+    console.log("🔔 Group call đến:", data);
+    const { callId, caller, groupName, chatId, isGroupCall } = data;
+    
+    // Hiển thị thông báo group call đến
+    try {
+      const callStore = useCallStore.getState();
+      callStore.setIncomingCall({
+        callId,
+        caller,
+        isGroupCall: true,
+        groupName,
+        chatId,
+        isActive: true
+      });
+    } catch (error) {
+      console.error("Lỗi khi xử lý group call đến:", error);
+    }
+  });
+  socket.on("message_forwarded", (data) => {
+  console.log("📩 Tin nhắn được chuyển tiếp:", data);
+  const { forwardedMessage, targetChatId, originalSender } = data;
+  
+  // Tạo tin nhắn mới với label "Đã chuyển tiếp"
+  const newForwardedMessage = {
+    ...forwardedMessage,
+    messageId: forwardedMessage.messageId || Date.now().toString(),
+    isForwarded: true,
+    originalMessage: forwardedMessage,
+    forwardedFrom: originalSender,
+    createdAt: new Date().toISOString(),
+    chatId: targetChatId
+  };
+  
+  // Thêm tin nhắn vào chat tương ứng
+  const chatStore = useChatStore.getState();
+  const { selectedChat } = chatStore;
+  
+  // Nếu đang ở trong chat được chuyển tiếp đến, hiển thị ngay lập tức
+  if (selectedChat && selectedChat.chatId === targetChatId) {
+    chatStore.addMessage(newForwardedMessage);
+  }
+  
+  // Cập nhật danh sách chat để hiển thị tin nhắn mới nhất
+  chatStore.updateChatLastMessage(targetChatId, newForwardedMessage);
+  
+  // Hiển thị thông báo
+  toast.success("Đã nhận tin nhắn được chuyển tiếp");
+});
+
+// Thêm sự kiện xác nhận chuyển tiếp thành công
+socket.on("forward_success", (data) => {
+  console.log("✅ Chuyển tiếp thành công:", data);
+  const { successCount, failedCount, targetChats } = data;
+  
+  if (successCount > 0) {
+    toast.success(`Đã chuyển tiếp tin nhắn đến ${successCount} cuộc trò chuyện`);
+  }
+  
+  if (failedCount > 0) {
+    toast.error(`Không thể chuyển tiếp đến ${failedCount} cuộc trò chuyện`);
+  }
+});
+
+// Thêm sự kiện lỗi khi chuyển tiếp
+socket.on("forward_error", (data) => {
+  console.error("❌ Lỗi chuyển tiếp:", data);
+  toast.error(data.message || "Không thể chuyển tiếp tin nhắn");
 });
 
 

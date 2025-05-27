@@ -16,6 +16,8 @@ import AddFriendPage from "./pages/AddFriendPage";
 import { useSocketStore } from "./store/useSocketStore";
 import { useFriendStore } from "./store/useFriendStore";
 import FriendRequestsPage from "./pages/FriendRequestsPage";
+import CallPage from "./pages/CallPage";
+import IncomingCallNotification from "./components/IncomingCallNotification";
 
 const App = () => {
   const { authUser } = useAuthStore(); // Không cần setOnlineUsers từ useAuthStore nữa
@@ -114,7 +116,22 @@ const App = () => {
           element={
             authUser ? <FriendRequestsPage /> : <Navigate to="/login" replace />}
         />
+        <Route
+          path="/call/:id"
+          element={authUser ? <CallPage /> : <Navigate to="/login" replace />}
+        />
       </Routes>
+      <IncomingCallNotification />
+<Toaster
+  position="top-right"
+  toastOptions={{
+    duration: 5000,
+    style: {
+      background: "#333",
+      color: "#fff",
+    },
+  }}
+/>
       <Toaster
         position="top-right"
         toastOptions={{

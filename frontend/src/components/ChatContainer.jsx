@@ -6,6 +6,8 @@ import MessageInput from "./MessageInput";
 import MessageSkeleton from "./skeletons/MessageSkeleton";
 import NoChatSelected from "./NoChatSelected";
 import MessageItem from "./MessageItem";
+import ForwardMessageModal from './ForwardMessageModal';
+
 
 const ChatContainer = () => {
   const { messages, getMessages, isMessagesLoading, selectedChat } = useChatStore();
@@ -36,55 +38,57 @@ const ChatContainer = () => {
   }
 
   return (
-  <div className="chat-container flex flex-col h-full">
-    {!selectedChat ? (
-      <NoChatSelected />
-    ) : (
-      <>
-        <ChatHeader chat={selectedChat} />
-        <div className="messages-container flex-1 overflow-y-auto p-4">
-          {isMessagesLoading ? (
-            <div className="loading-messages">
-              <MessageSkeleton />
-              <MessageSkeleton />
-              <MessageSkeleton />
-            </div>
-          ) : (
-            <>
-              {messages
-                .filter(msg => {
-                  if (!msg) return false;
-                  if (msg.isTemp || msg.isPending) {
-                    const hasSentMessage = messages.some(m =>
-                      m && m.content === msg.content &&
-                      m.senderId && msg.senderId &&
-                      m.senderId._id === msg.senderId._id &&
-                      !m.isTemp && !m.isPending
-                    );
-                    return !hasSentMessage;
-                  }
-                  if (!msg.content && !msg.image && !msg.video && !msg.fileUrl) {
-                    return false;
-                  }
-                  return true;
-                })
-                .map((message) => (
-                  <MessageItem
-                    key={message.messageId || message._id}
-                    message={message}
-                    currentUserId={currentUserId}
-                    isGroupChat={selectedChat.isGroupChat}
-                  />
-                ))}
-              <div ref={messageEndRef} />
-            </>
-          )}
-        </div>
-        <MessageInput />
-      </>
-    )}
-  </div>
-);
+    
+    <div className="chat-container flex flex-col h-full">
+             {selectedChat && <ChatHeader chat={selectedChat} />}
+      <div className="messages-container flex-1 overflow-y-auto p-4">
+        {isMessagesLoading ? (
+          <div className="loading-messages">
+            <MessageSkeleton />
+            <MessageSkeleton />
+            <MessageSkeleton />
+          </div>
+        ) : (
+          <>
+            {messages
+              // Lọc bỏ tin nhắn tạm thời nếu đã có tin nhắn thực từ server
+              .filter(msg => {
+                // Bỏ qua tin nhắn không hợp lệ
+                if (!msg) return false;
+                
+               // Nếu là tin nhắn tạm thời và đã có tin nhắn thực tương ứng, không hiển thị
+              if (msg.isTemp || msg.isPending) {
+                const hasSentMessage = messages.some(m => 
+                  m && m.content === msg.content && 
+                  m.senderId && msg.senderId && 
+                  m.senderId._id === msg.senderId._id &&
+                  !m.isTemp && !m.isPending
+                );
+                return !hasSentMessage;
+              }
+              
+              // Nếu là tin nhắn rỗng không có nội dung, không hiển thị
+              if (!msg.content && !msg.image && !msg.video && !msg.fileUrl) {
+                return false;
+              }
+              
+              return true;
+            })
+              .map((message) => (
+                <MessageItem
+                  key={message.messageId || message._id}
+                  message={message}
+                  currentUserId={currentUserId}
+                  isGroupChat={selectedChat.isGroupChat} 
+                />
+              ))}
+            <div ref={messageEndRef} />
+          </>
+        )}
+      </div>
+      {selectedChat && <MessageInput />}
+    </div>
+  );
 };
 
 export default ChatContainer;
