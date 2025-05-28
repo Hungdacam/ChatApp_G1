@@ -60,7 +60,14 @@ io.on('connection', (socket) => {
         console.log("📨 Nhận từ client test-client:", data);
         socket.emit("test-server", { message: "Server nhận được!", original: data });
     });
-
+socket.on("join_chat", ({ chatId }) => {
+    socket.join(chatId);
+    console.log(`Socket ${socket.id} đã join phòng chat ${chatId}`);
+  });
+    socket.on("leave_chat", ({ chatId }) => {
+    socket.leave(chatId);
+    console.log(`Socket ${socket.id} đã rời phòng chat ${chatId}`);
+  });
     socket.on("register", (userId) => {
         onlineUsers.set(userId, socket.id);
         console.log("📥 Nhận được register:", userId);

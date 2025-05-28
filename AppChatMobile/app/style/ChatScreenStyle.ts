@@ -1,4 +1,3 @@
-
 import { StyleSheet } from "react-native";
 export default StyleSheet.create({
   safeArea: {
@@ -85,17 +84,21 @@ export default StyleSheet.create({
     marginHorizontal: 5,
   },
 messageContainer: {
-  marginBottom: 10,
-  alignSelf: "flex-start",  // mặc định, sẽ được override trong render
+  marginBottom: 18, // tăng khoảng cách (mặc định là 10)
+  alignSelf: "flex-start",
   maxWidth: "90%",
   minWidth: "40%",
+  width: "100%", // Thêm dòng này
 },
 
 messageContent: {
   padding: 10,
   borderRadius: 10,
   maxWidth: "100%",
+  width: "100%", // Thêm dòng này
   flexShrink: 1,
+  backgroundColor: "#f0f0f0", // hoặc "#007AFF" cho user hiện tại
+  overflow: "hidden", // đảm bảo không bị tràn
 },
 
   senderName: {
@@ -107,6 +110,7 @@ messageContent: {
   messageText: {
     fontSize: 14,
     fontStyle: "normal",
+    flexWrap: "wrap", // đảm bảo text xuống dòng
   },
   messageImage: {
     width: 200,
@@ -146,6 +150,9 @@ messageFooter: {
     padding: 20,
     width: "80%",
     maxHeight: "70%",
+           
+    justifyContent: "center",    
+    alignSelf: "center",        
   },
   modalTitle: {
     fontSize: 18,
@@ -229,17 +236,91 @@ messageFooter: {
   padding: 6,
   marginBottom: 4,
   borderRadius: 4,
+  maxWidth: "100%",
+  width: "100%", // Thêm dòng này
+  alignSelf: "flex-start", // Thêm dòng này
 },
 
 replySenderName: {
   fontWeight: "bold",
   color: "#007AFF",
   marginBottom: 2,
+  fontSize: 15,
 },
 
 replyText: {
   fontStyle: "italic",
   color: "#555",
+  flexWrap: "wrap",
+  fontSize: 14,
+},
+forwardedBox: {
+  backgroundColor: "#f5f5f5",
+  borderLeftWidth: 3,
+  borderLeftColor: "#ff9800",
+  padding: 6,
+  marginBottom: 4,
+  borderRadius: 4,
+  maxWidth: "100%",
+},
+pinnedBanner: {
+  backgroundColor: "#fff8dc",
+  padding: 8,
+  borderBottomColor: "#ccc",
+  borderBottomWidth: 1,
+},
+pinnedText: {
+  fontSize: 14,
+  color: "#333",
+},
+pinnedItem: {
+  padding: 10,
+  borderBottomWidth: 1,
+  borderBottomColor: "#eee",
+},
+pinnedItemLarge: {
+  backgroundColor: "#fffbe7",
+  borderRadius: 8,
+  padding: 12,
+  marginBottom: 10,
+  borderWidth: 1,
+  borderColor: "#ffe082",
+},
+pinnedSender: {
+  fontWeight: "bold",
+  color: "#007AFF",
+  marginBottom: 4,
+},
+pinnedContent: {
+  fontSize: 15,
+  color: "#333",
+  marginBottom: 8,
+},
+unpinButton: {
+  alignSelf: "flex-end",
+  paddingHorizontal: 10,
+  paddingVertical: 4,
+  backgroundColor: "#ffb300",
+  borderRadius: 5,
+},
+unpinButtonText: {
+  color: "#fff",
+  fontWeight: "bold",
+},
+
+pinNotification: {
+  backgroundColor: "#fff",
+  borderRadius: 20,
+  paddingVertical: 8,
+  paddingHorizontal: 16,
+  alignSelf: "center",
+  marginVertical: 8,
+  flexDirection: "row",
+  alignItems: "center",
+  shadowColor: "#000",
+  shadowOpacity: 0.08,
+  shadowRadius: 4,
+  elevation: 2,
 },
 
 });

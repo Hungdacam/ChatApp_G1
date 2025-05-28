@@ -28,6 +28,7 @@ import Modal from "react-native-modal";
 import ImageViewer from "react-native-image-zoom-viewer";
 import { Video, ResizeMode } from "expo-av";
 import { WebView } from "react-native-webview";
+import * as Clipboard from 'expo-clipboard';
 import styles from "../style/ChatScreenStyle";
 
 interface Message {
@@ -80,11 +81,21 @@ export default function ChatScreen({ route }) {
   const [activeCallId, setActiveCallId] = useState<string | null>(null);
   const [streamToken, setStreamToken] = useState<string | null>(null);
   const [replyTo, setReplyTo] = useState<{ messageId: string; senderName: string; content: string } | null>(null);
-
+const [pinnedModalVisible, setPinnedModalVisible] = useState(false);
+const [pinNotification, setPinNotification] = useState<{ senderName: string; content: string; messageId: string } | null>(null);
   const imageMessages = messages
     .filter((msg) => typeof msg.image === "string" && !!msg.image)
     .map((msg) => ({ url: msg.image as string }));
+ const pinnedMessages = messages.filter(msg => msg.isPinned);
+    useEffect(() => {
+  // Join phòng chat khi vào màn hình
+  socket.emit("join_chat", { chatId });
 
+  return () => {
+    // Rời phòng chat khi thoát màn hình
+    socket.emit("leave_chat", { chatId });
+  };
+}, [chatId]);
   // Lấy Stream token
   useEffect(() => {
     const initializeStream = async () => {
@@ -182,7 +193,16 @@ export default function ChatScreen({ route }) {
         navigation.navigate("HomeTabs", { screen: "Inbox" });
       }
     });
+socket.on("message_pinned", ({ messageId, senderName, content }) => {
+  setPinNotification({ senderName, content, messageId });
+  fetchMessages();
+  // Ẩn thông báo sau 5 giây
+  setTimeout(() => setPinNotification(null), 5000);
+});
 
+socket.on("message_unpinned", ({ messageId }) => {
+    fetchMessages();
+  });
     markMessageAsRead();
 
     return () => {
@@ -196,6 +216,8 @@ export default function ChatScreen({ route }) {
       socket.off("incoming_call");
       socket.off("call_ended");
       socket.off("call_rejected");
+      socket.off("message_pinned");
+      socket.off("message_unpinned");
     };
   }, [chatId, incomingCall, activeCallId, navigation]);
 
@@ -607,6 +629,37 @@ export default function ChatScreen({ route }) {
       Alert.alert("Lỗi", "Không thể kết thúc cuộc gọi.");
     }
   };
+const pinMessage = async (messageId: string) => {
+  try {
+    const token = await AsyncStorage.getItem("token");
+    const parsedToken = JSON.parse(token);
+    await axios.post(`${BASE_URL}/api/chat/pin`, { messageId }, {
+      headers: { Authorization: `Bearer ${parsedToken.token}` },
+    });
+  } catch (error) {
+    const msg = error.response?.data?.message;
+    Alert.alert("Lỗi", msg || "Không thể ghim tin nhắn.");
+  }
+};
+
+const unpinMessage = async (messageId: string) => {
+  try {
+    const token = await AsyncStorage.getItem("token");
+    const parsedToken = JSON.parse(token);
+    await axios.post(`${BASE_URL}/api/chat/unpin`, { messageId }, {
+      headers: { Authorization: `Bearer ${parsedToken.token}` },
+    });
+  } catch (error) {
+    Alert.alert("Lỗi", error.response?.data?.message || "Không thể bỏ ghim.");
+  }
+};
+
+const scrollToMessage = (messageId: string) => {
+  const index = messages.findIndex(m => m.messageId === messageId);
+  if (index !== -1) {
+    flatListRef.current?.scrollToIndex({ index, animated: true });
+  }
+};
 
   const renderMessage = ({ item }: { item: Message }) => {
     console.log("Rendering item:", item);
@@ -643,6 +696,19 @@ export default function ChatScreen({ route }) {
       onPress: () => deleteMessageLocally(item.messageId),
       style: "destructive",
     });
+if (item.isPinned) {
+    buttons.push({
+      text: "Bỏ ghim",
+      onPress: () => unpinMessage(item.messageId),
+      style: "default",
+    });
+  } else {
+    buttons.push({
+      text: "Ghim tin nhắn",
+      onPress: () => pinMessage(item.messageId),
+      style: "default",
+    });
+  }
 
     if (isCurrentUser && !isRecalled) {
       buttons.push({
@@ -941,6 +1007,36 @@ if (repliedMessage) {
             </TouchableOpacity>
           </View>
         )}
+      
+
+{pinnedMessages.length > 0 && (
+  <TouchableOpacity
+    onPress={() => setPinnedModalVisible(true)}
+    style={styles.pinnedBanner}
+    activeOpacity={0.8}
+  >
+    <Text style={styles.pinnedText}>
+      📌 {pinnedMessages.length} tin nhắn đã ghim
+    </Text>
+  </TouchableOpacity>
+)}
+{pinNotification && (
+  <View style={styles.pinNotification}>
+    <Text>
+      <Text style={{ color: "#ff9800" }}>📌 </Text>
+      Bạn đã ghim tin nhắn <Text style={{ fontWeight: "bold" }}>{pinNotification.content}</Text>.{" "}
+      <Text
+        style={{ color: "#1976d2" }}
+        onPress={() => {
+          scrollToMessage(pinNotification.messageId);
+          setPinNotification(null);
+        }}
+      >
+        Xem
+      </Text>
+    </Text>
+  </View>
+)}
         <FlatList
           ref={flatListRef}
           data={messages}
@@ -1071,6 +1167,42 @@ if (repliedMessage) {
             />
           </Modal>
         )}
+      <Modal isVisible={pinnedModalVisible} onBackdropPress={() => setPinnedModalVisible(false)}>
+  <View style={styles.modalContent}>
+    <Text style={styles.modalTitle}>📌 Danh sách tin nhắn đã ghim</Text>
+    <FlatList
+      data={pinnedMessages}
+      keyExtractor={(item) => item.messageId}
+      renderItem={({ item }) => (
+        <TouchableOpacity
+          onPress={() => {
+            setPinnedModalVisible(false);
+            scrollToMessage(item.messageId);
+          }}
+          style={styles.pinnedItemLarge}
+        >
+          <Text style={styles.pinnedSender}>{item.senderId.name}</Text>
+          <Text style={styles.pinnedContent}>{item.content}</Text>
+          <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
+            <TouchableOpacity
+              onPress={() => Clipboard.setStringAsync(item.content)}
+              style={[styles.unpinButton, { marginRight: 8, backgroundColor: "#1976d2" }]}
+            >
+              <Text style={styles.unpinButtonText}>Copy</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => unpinMessage(item.messageId)} style={styles.unpinButton}>
+              <Text style={styles.unpinButtonText}>Bỏ ghim</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      )}
+      ListEmptyComponent={<Text style={styles.emptyText}>Chưa có tin nhắn ghim.</Text>}
+    />
+    <TouchableOpacity onPress={() => setPinnedModalVisible(false)} style={styles.closeButton}>
+      <Text style={styles.closeButtonText}>Đóng</Text>
+    </TouchableOpacity>
+  </View>
+</Modal>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

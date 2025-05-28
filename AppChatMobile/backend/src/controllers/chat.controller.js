@@ -339,3 +339,87 @@ exports.getChatDetails = async (req, res) => {
     res.status(500).json({ message: "Lỗi server", error: error.message });
   }
 };
+
+exports.pinMessage = async (req, res) => {
+  try {
+    console.log("Request body nhận được:", req.body);
+    console.log("Headers:", req.headers);
+    console.log("User:", req.user);
+    
+    const { messageId } = req.body;
+    const userId = req.user._id;
+
+    // Kiểm tra messageId
+    if (!messageId) {
+      console.log("Lỗi: messageId bị thiếu");
+      return res.status(400).json({ message: "messageId là bắt buộc" });
+    }
+
+    console.log("Đang tìm message với messageId:", messageId);
+    const message = await Message.findOne({ messageId });
+    
+    if (!message) {
+      console.log("Lỗi: Không tìm thấy message");
+      return res.status(404).json({ message: "Không tìm thấy tin nhắn." });
+    }
+
+    // Chỉ cho phép ghim tối đa 3 tin nhắn mỗi chat
+    const pinnedCount = await Message.countDocuments({ chatId: message.chatId, isPinned: true });
+    if (pinnedCount >= 3) return res.status(400).json({ message: "Chỉ được ghim tối đa 3 tin nhắn." });
+
+    message.isPinned = true;
+    message.pinnedAt = new Date();
+    message.pinnedBy = userId;
+    await message.save();
+
+    // Phát socket cho các client cập nhật giao diện
+    const io = req.app.get("io");
+    io.to(message.chatId).emit("message_pinned", {
+  messageId: message.messageId,
+  senderName: req.user.name,
+  content: message.content
+});
+
+    res.status(200).json({ message: "Đã ghim tin nhắn", messageId: message.messageId }
+      
+    );
+  } catch (error) {
+    console.error("Lỗi ghim tin nhắn:", error);
+    res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+// Bỏ ghim tin nhắn
+exports.unpinMessage = async (req, res) => {
+  try {
+    const { messageId } = req.body;
+    const message = await Message.findOne({ messageId });
+    if (!message) return res.status(404).json({ message: "Không tìm thấy tin nhắn." });
+
+    message.isPinned = false;
+    message.pinnedAt = null;
+    message.pinnedBy = null;
+    await message.save();
+
+    // Phát socket cho các client cập nhật giao diện
+    const io = req.app.get("io");
+    io.to(message.chatId).emit("message_unpinned", { messageId: message.messageId });
+
+    res.status(200).json({ message: "Đã bỏ ghim tin nhắn", messageId: message.messageId });
+  } catch (error) {
+    console.error("Lỗi bỏ ghim tin nhắn:", error);
+    res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+// Lấy danh sách tin nhắn ghim của 1 chat
+exports.getPinnedMessages = async (req, res) => {
+  try {
+    const { chatId } = req.params;
+    const pinnedMessages = await Message.find({ chatId, isPinned: true }).sort({ pinnedAt: -1 });
+    res.status(200).json({ pinnedMessages });
+  } catch (error) {
+    console.error("Lỗi lấy tin nhắn ghim:", error);
+    res.status(500).json({ message: "Lỗi server" });
+  }
+};
