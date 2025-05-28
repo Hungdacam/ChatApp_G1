@@ -99,11 +99,13 @@ export default function ChatInfoScreen({ route }: ChatInfoScreenProps) {
       });
 
       const media = response.data
-        .filter((msg: any) => msg.image || msg.video || msg.fileUrl)
+        .filter((msg: any) => msg.image || msg.video || msg.fileUrl || /(https?:\/\/[^\s]+)/.test(msg.content))
         .map((msg: any) => {
           if (msg.image) return { type: "image", url: msg.image };
           if (msg.video) return { type: "video", url: msg.video };
           if (msg.fileUrl) return { type: "file", url: msg.fileUrl, name: msg.fileName };
+          // Nếu là link
+          if (/(https?:\/\/[^\s]+)/.test(msg.content)) return { type: "link", url: msg.content };
           return null;
         })
         .filter((item): item is MediaItem => item !== null);
@@ -233,6 +235,10 @@ export default function ChatInfoScreen({ route }: ChatInfoScreenProps) {
             </View>
           </View>
         </TouchableOpacity>
+      ) : item.type === "link" && activeTab === "Links" ? (
+        <TouchableOpacity onPress={() => Linking.openURL(item.url)}>
+          <Text style={{ color: "#1976d2", textDecorationLine: "underline" }}>{item.url}</Text>
+        </TouchableOpacity>
       ) : null}
     </View>
   );
@@ -311,6 +317,7 @@ export default function ChatInfoScreen({ route }: ChatInfoScreenProps) {
           data={mediaItems.filter((item) => {
             if (activeTab === "Images") return item.type === "image" || item.type === "video";
             if (activeTab === "Files") return item.type === "file";
+            if (activeTab === "Links") return item.type === "link";
             return false;
           })}
           renderItem={renderMediaItem}

@@ -30,6 +30,7 @@ import { Video, ResizeMode } from "expo-av";
 import { WebView } from "react-native-webview";
 import * as Clipboard from 'expo-clipboard';
 import styles from "../style/ChatScreenStyle";
+import ParsedText from 'react-native-parsed-text';
 
 interface Message {
   messageId: string;
@@ -892,9 +893,21 @@ if (repliedMessage) {
                   </View>
                 </TouchableOpacity>
               ) : (
-               <Text style={[styles.messageText, { color: isCurrentUser ? "#fff" : "#333" }]}>
+               <ParsedText
+  style={[styles.messageText, { color: isCurrentUser ? "#fff" : "#333" }]}
+  parse={[
+    {
+      type: 'url',
+      style: {
+        color: isCurrentUser ? "#fff" : "#1976d2", // Nếu là tin nhắn của bạn thì màu trắng, còn lại màu xanh
+        textDecorationLine: 'underline'
+      },
+      onPress: (url) => Linking.openURL(url)
+    }
+  ]}
+>
   {isReply ? replyContent : item.content}
-</Text>
+</ParsedText>
 
               )}
               <View style={styles.messageFooter}>
