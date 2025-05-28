@@ -3,11 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import useCallStore from '../store/useCallStore';
 import { Phone, PhoneOff, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
-
+import useAuthStore from '../store/useAuthStore';
 const IncomingCallNotification = () => {
   const { incomingCall, acceptIncomingCall, rejectIncomingCall } = useCallStore();
   const navigate = useNavigate();
-  
+  const { authUser } = useAuthStore();
   useEffect(() => {
     const handleCallAccepted = (event) => {
       const { callId } = event.detail;

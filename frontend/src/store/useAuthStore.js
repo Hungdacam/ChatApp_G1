@@ -106,16 +106,29 @@ const useAuthStore = create((set) => ({
     }
   },
 
-  logout: async () => {
-    try {
-      await axiosInstance.post("/auth/logout");
-      localStorage.removeItem("authToken");
-      set({ authUser: null });
-      toast.success("Đăng xuất thành công");
-    } catch (error) {
-      toast.error(error.response?.data?.message || "Lỗi khi đăng xuất");
+  // Trong useAuthStore.js
+logout: async () => {
+  try {
+    await axiosInstance.post("/auth/logout");
+    
+    // ✅ Clear tất cả dữ liệu liên quan
+    localStorage.removeItem("authToken");
+    localStorage.removeItem("userId");
+    localStorage.removeItem("userName");
+    localStorage.removeItem("userAvatar");
+    
+    // Clear call store
+    if (window.useCallStore) {
+      window.useCallStore.getState().resetClient();
     }
-  },
+    
+    set({ authUser: null });
+    toast.success("Đăng xuất thành công");
+  } catch (error) {
+    toast.error(error.response?.data?.message || "Lỗi khi đăng xuất");
+  }
+},
+
 
   updateProfile: async (data) => {
     set({ isUpdatingProfile: true });

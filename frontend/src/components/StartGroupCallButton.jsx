@@ -9,6 +9,7 @@ const StartGroupCallButton = ({ chatId, className }) => {
   const [isCreating, setIsCreating] = useState(false);
   const { createGroupCall } = useCallStore();
   const { selectedChat } = useChatStore();
+
   const navigate = useNavigate();
 
 const handleStartGroupCall = async () => {

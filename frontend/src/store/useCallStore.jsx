@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import toast from 'react-hot-toast';
 import axiosInstance from '../lib/axios';
 import { StreamVideoClient } from '@stream-io/video-react-sdk';
-
+import useAuthStore from './useAuthStore';
 // Không import useSocketStore để tránh circular dependency
 // import { useSocketStore } from './useSocketStore';
 
@@ -62,6 +62,11 @@ const useCallStore = create((set, get) => ({
 createGroupCall: async (chatId, callType = 'video') => {
   set({ isLoading: true });
   try {
+    const { authUser } = useAuthStore.getState();
+      if (!authUser || !authUser._id) {
+        throw new Error('Không có thông tin người dùng xác thực');
+      }
+    const callerId = authUser._id.toString();
     const response = await axiosInstance.post('/stream/group-call', {
       chatId,
       callType
@@ -69,29 +74,29 @@ createGroupCall: async (chatId, callType = 'video') => {
     
     // Gửi thông báo group call qua socket
     const socket = window.socketInstance;
-    if (socket) {
-      console.log("🔔 Gửi sự kiện start_group_call với dữ liệu:", {
-        callId: response.data.callId,
-        chatId,
-        callerId: localStorage.getItem("userId"),
-        isGroupCall: true
-      });
-      socket.emit("start_group_call", {
-        callId: response.data.callId,
-        chatId,
-        callerId: localStorage.getItem("userId"),
-        isGroupCall: true
-      });
-    }
+      if (socket) {
+        console.log('🔔 Gửi sự kiện start_group_call với dữ liệu:', {
+          callId: response.data.callId,
+          chatId,
+          callerId,
+          isGroupCall: true,
+        });
+        socket.emit('start_group_call', {
+          callId: response.data.callId,
+          chatId,
+          callerId,
+          isGroupCall: true,
+        });
+      }
     
     set({ callId: response.data.callId, isLoading: false });
-    return response.data.callId;
-  } catch (error) {
-    console.error('Error creating group call:', error);
-    set({ error: 'Không thể tạo group call', isLoading: false });
-    toast.error('Không thể tạo group call');
-    return null;
-  }
+      return response.data.callId;
+    } catch (error) {
+      console.error('Lỗi tạo group call:', error);
+      set({ error: 'Không thể tạo group call', isLoading: false });
+      toast.error('Không thể tạo group call');
+      return null;
+    }
 },
 
     // Tạo cuộc gọi mới

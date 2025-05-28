@@ -17,7 +17,7 @@ import {
 
 import "@stream-io/video-react-sdk/dist/css/styles.css";
 
-const STREAM_API_KEY = "8xpuuh264zb6";
+const STREAM_API_KEY = import.meta.env.VITE_STREAM_API_KEY;
 
 const CallPage = () => {
   const { id: callId } = useParams();
@@ -37,64 +37,73 @@ const CallPage = () => {
   } = useCallStore();
 
   useEffect(() => {
-    let isMounted = true; // Thêm biến này để tránh cập nhật state sau khi component unmount
-    
-    const initializeCall = async () => {
-      if (!authUser) return;
-
-      try {
-        // 1. Lấy token nếu chưa có
-        let streamToken = token;
-        if (!streamToken) {
-          streamToken = await fetchToken();
-          if (!streamToken) {
-            throw new Error('Không thể lấy Stream token');
-          }
-        }
-
-        // 2. Khởi tạo client nếu chưa có
-        let streamClient = client;
-        if (!streamClient) {
-          const user = {
-            id: authUser._id,
-            name: authUser.name || 'User',
-            image: authUser.avatar || '',
-          };
-          
-          streamClient = initClient(STREAM_API_KEY, user, streamToken);
-          if (!streamClient) {
-            throw new Error('Không thể khởi tạo Stream client');
-          }
-        }
-
-        // 3. Tham gia cuộc gọi
-        if (!call && isMounted) {
-          await joinCall(callId);
-        }
-      } catch (error) {
-        console.error("Error setting up call:", error);
-        toast.error("Không thể tham gia cuộc gọi: " + error.message);
-        
-        // Chuyển hướng về trang chủ sau khi báo lỗi
+  let isMounted = true;
+  
+  const initializeCall = async () => {
+    if (!authUser || !authUser._id) {
+        console.error("Không có authUser, chuyển hướng về trang chủ");
         if (isMounted) {
           navigate('/');
         }
-      } finally {
-        if (isMounted) {
-          setIsConnecting(false);
+        return;
+      }
+    
+    const currentUserId = authUser._id.toString();
+    console.log(`🚀 Initializing call for user: ${currentUserId}, callId: ${callId}`);
+    
+    try {
+      let streamToken = token;
+      if (!streamToken) {
+        streamToken = await fetchToken();
+        if (!streamToken) {
+          throw new Error('Không thể lấy Stream token');
         }
       }
-    };
 
-    initializeCall();
+      let streamClient = client;
+      if (!streamClient) {
+        const user = {
+          id: currentUserId,
+          name: authUser.name || 'User',
+          image: authUser.avatar || '',
+        };
+        streamClient = initClient(STREAM_API_KEY, user, streamToken);
+        if (!streamClient) {
+          throw new Error('Không thể khởi tạo Stream client');
+        }
+      }
 
-    // Cleanup khi component unmount
-    return () => {
-      isMounted = false;
-      reset();
-    };
-  }, [authUser, callId]); // Giảm số lượng dependencies để tránh re-render không cần thiết
+      // ✅ Đảm bảo mỗi user join call riêng biệt
+      if (!call && isMounted) {
+        console.log(`👤 User ${currentUserId} attempting to join call ${callId}`);
+        await joinCall(callId);
+      }
 
+    } catch (error) {
+      console.error(`❌ Error setting up call for user ${currentUserId}:`, error);
+      toast.error("Không thể tham gia cuộc gọi: " + error.message);
+      if (isMounted) {
+        navigate('/');
+      }
+    } finally {
+      if (isMounted) {
+        setIsConnecting(false);
+      }
+    }
+  };
+
+  initializeCall();
+
+  return () => {
+    isMounted = false;
+    // ✅ Cleanup localStorage khi unmount
+    const currentUserId = authUser?._id;
+    if (currentUserId) {
+      localStorage.removeItem(`acceptedCallId_${currentUserId}_${callId}`);
+    }
+    reset();
+  };
+}, [authUser, callId]);
 
  // Tạo biến isLoading từ các trạng thái loading khác nhau
 const isLoading = isAuthLoading || isStreamLoading || isConnecting;
