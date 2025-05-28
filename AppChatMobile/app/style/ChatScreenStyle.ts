@@ -74,10 +74,7 @@ export default StyleSheet.create({
     flexWrap: "wrap",
     fontSize: 14,
   },
-  messageContainer: {
-    marginBottom: 10,
-    maxWidth: "80%",
-  },
+
   messageRow: {
     alignItems: "flex-end",
   },
@@ -87,11 +84,20 @@ export default StyleSheet.create({
     borderRadius: 15,
     marginHorizontal: 5,
   },
-  messageContent: {
-    padding: 10,
-    borderRadius: 10,
-    maxWidth: "100%",
-  },
+messageContainer: {
+  marginBottom: 10,
+  alignSelf: "flex-start",  // mặc định, sẽ được override trong render
+  maxWidth: "90%",
+  minWidth: "40%",
+},
+
+messageContent: {
+  padding: 10,
+  borderRadius: 10,
+  maxWidth: "100%",
+  flexShrink: 1,
+},
+
   senderName: {
     fontSize: 12,
     fontWeight: "bold",
@@ -114,11 +120,14 @@ export default StyleSheet.create({
     borderRadius: 10,
     marginBottom: 5,
   },
-  messageFooter: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 5,
-  },
+messageFooter: {
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between", // thêm dòng này
+  marginTop: 5,
+  width: "100%", // để căn đều theo khung tin nhắn
+},
+
   messageTime: {
     fontSize: 10,
     marginRight: 5,
@@ -213,4 +222,24 @@ export default StyleSheet.create({
     fontSize: 12,
     textAlign: "center", // Căn giữa chi tiết
   },
+  replyBox: {
+  backgroundColor: "#e6e6e6",
+  borderLeftWidth: 3,
+  borderLeftColor: "#007AFF",
+  padding: 6,
+  marginBottom: 4,
+  borderRadius: 4,
+},
+
+replySenderName: {
+  fontWeight: "bold",
+  color: "#007AFF",
+  marginBottom: 2,
+},
+
+replyText: {
+  fontStyle: "italic",
+  color: "#555",
+},
+
 });

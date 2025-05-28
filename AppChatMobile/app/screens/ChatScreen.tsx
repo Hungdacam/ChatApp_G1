@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Linking,
+  PanResponder,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import axios from "axios";
@@ -26,15 +27,15 @@ import { useNavigation } from "@react-navigation/native";
 import Modal from "react-native-modal";
 import ImageViewer from "react-native-image-zoom-viewer";
 import { Video, ResizeMode } from "expo-av";
-import { WebView } from "react-native-webview"; 
+import { WebView } from "react-native-webview";
 import styles from "../style/ChatScreenStyle";
+
 interface Message {
   messageId: string;
   chatId: string;
   senderId: { _id: string; name?: string; avatar?: string };
   content: string;
   fileUrl?: string;
-  file滴: string;
   fileName?: string;
   image?: string;
   video?: string;
@@ -42,6 +43,7 @@ interface Message {
   isRead: boolean;
   isRecalled?: boolean;
   createdAt: string;
+  replyToMessageId?: string;
 }
 
 interface Chat {
@@ -77,6 +79,7 @@ export default function ChatScreen({ route }) {
   const [incomingCall, setIncomingCall] = useState<CallData | null>(null);
   const [activeCallId, setActiveCallId] = useState<string | null>(null);
   const [streamToken, setStreamToken] = useState<string | null>(null);
+  const [replyTo, setReplyTo] = useState<{ messageId: string; senderName: string; content: string } | null>(null);
 
   const imageMessages = messages
     .filter((msg) => typeof msg.image === "string" && !!msg.image)
@@ -158,7 +161,7 @@ export default function ChatScreen({ route }) {
     socket.on("group_member_added", fetchMessages);
     socket.on("group_member_removed", fetchMessages);
     socket.on("group_dissolved", () => {
-      Alert.alert("Thông báo", "Nh sehen được giải tán.");
+      Alert.alert("Thông báo", "Nhóm đã được giải tán.");
       navigation.navigate("HomeTabs", { screen: "Inbox" });
     });
     socket.on("group_avatar_updated", (data: { chatId: string; avatar: string }) => {
@@ -167,13 +170,12 @@ export default function ChatScreen({ route }) {
       }
     });
     socket.on("group_ownership_transferred", (data: { chatId: string; newCreatorId: string }) => {
-  if (data.chatId === chatId) {
-    Alert.alert("Thông báo", "Quyền trưởng nhóm đã được chuyển.");
-    fetchMessages();
-    // Làm mới chi tiết nhóm để cập nhật trạng thái trưởng nhóm
-    fetchGroupDetails();
-  }
-});
+      if (data.chatId === chatId) {
+        Alert.alert("Thông báo", "Quyền trưởng nhóm đã được chuyển.");
+        fetchMessages();
+        fetchGroupDetails();
+      }
+    });
     socket.on("left_group", (data: { chatId: string; groupName: string }) => {
       if (data.chatId === chatId) {
         Alert.alert("Thông báo", `Bạn đã rời khỏi nhóm ${data.groupName}.`);
@@ -196,24 +198,25 @@ export default function ChatScreen({ route }) {
       socket.off("call_rejected");
     };
   }, [chatId, incomingCall, activeCallId, navigation]);
-const fetchGroupDetails = async () => {
-  try {
-    const token = await AsyncStorage.getItem("token");
-    if (!token) throw new Error("Không tìm thấy token");
-    const parsedToken = JSON.parse(token);
 
-    const response = await axios.get(`${BASE_URL}/api/chat/${chatId}`, {
-      headers: { Authorization: `Bearer ${parsedToken.token}` },
-    });
+  const fetchGroupDetails = async () => {
+    try {
+      const token = await AsyncStorage.getItem("token");
+      if (!token) throw new Error("Không tìm thấy token");
+      const parsedToken = JSON.parse(token);
 
-    const chat = response.data;
-    setAvatar(chat.avatar || "https://via.placeholder.com/50");
-    // Cập nhật thêm các thông tin khác nếu cần
-  } catch (error) {
-    console.error("Lỗi lấy chi tiết nhóm:", error);
-    Alert.alert("Lỗi", "Không thể tải chi tiết nhóm.");
-  }
-};
+      const response = await axios.get(`${BASE_URL}/api/chat/${chatId}`, {
+        headers: { Authorization: `Bearer ${parsedToken.token}` },
+      });
+
+      const chat = response.data;
+      setAvatar(chat.avatar || "https://via.placeholder.com/50");
+    } catch (error) {
+      console.error("Lỗi lấy chi tiết nhóm:", error);
+      Alert.alert("Lỗi", "Không thể tải chi tiết nhóm.");
+    }
+  };
+
   const fetchMessages = async () => {
     try {
       const token = await AsyncStorage.getItem("token");
@@ -389,13 +392,13 @@ const fetchGroupDetails = async () => {
 
         if (selectedFile.mimeType.startsWith("image/")) {
           formData.append("image", file);
-          formData.append("content", "[Image]");
+          formData.append("content", replyTo ? `@${replyTo.senderName} ${content || "[Image]"}` : "[Image]");
         } else if (selectedFile.mimeType.startsWith("video/")) {
           formData.append("video", file);
-          formData.append("content", "[Video]");
+          formData.append("content", replyTo ? `@${replyTo.senderName} ${content || "[Video]"}` : "[Video]");
         } else {
           formData.append("file", file);
-          formData.append("content", selectedFile.name);
+          formData.append("content", replyTo ? `@${replyTo.senderName} ${content || selectedFile.name}` : selectedFile.name);
         }
 
         await axios.post(`${BASE_URL}/api/chat/send`, formData, {
@@ -409,7 +412,7 @@ const fetchGroupDetails = async () => {
       } else if (content.trim()) {
         await axios.post(
           `${BASE_URL}/api/chat/send`,
-          { chatId, content, receiverId },
+          { chatId, content: replyTo ? `@${replyTo.senderName} ${content}` : content, receiverId ,replyToMessageId: replyTo?.messageId},
           {
             headers: { Authorization: `Bearer ${parsedToken.token}` },
           }
@@ -419,6 +422,7 @@ const fetchGroupDetails = async () => {
       }
 
       setContent("");
+      setReplyTo(null);
       fetchMessages();
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
@@ -605,13 +609,35 @@ const fetchGroupDetails = async () => {
   };
 
   const renderMessage = ({ item }: { item: Message }) => {
+    console.log("Rendering item:", item);
+
   const isRecalled = item.isRecalled || item.content === "Tin nhắn đã được thu hồi";
   const isCurrentUser = item.senderId._id === currentUserId;
 
+  const panResponder = PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: (evt, gestureState) => {
+      return gestureState.dx > 30;
+    },
+    onPanResponderRelease: (evt, gestureState) => {
+      if (gestureState.dx > 30 && !isCurrentUser && !isRecalled) {
+        setReplyTo({ messageId: item.messageId, senderName: item.senderId.name || "Unknown", content: item.content });
+      }
+    },
+  });
+
   const handleLongPress = () => {
     const buttons = [];
-
     buttons.push({ text: "Hủy", style: "cancel" });
+
+    if (!isCurrentUser && !isRecalled) {
+      buttons.push({
+        text: "Trả lời",
+        onPress: () => setReplyTo({ messageId: item.messageId, senderName: item.senderId.name || "Unknown", content: item.content }),
+        style: "default",
+      });
+    }
+
     buttons.push({
       text: "Xóa tin nhắn",
       onPress: () => deleteMessageLocally(item.messageId),
@@ -655,8 +681,28 @@ const fetchGroupDetails = async () => {
     Alert.alert("Tùy chọn tin nhắn", "Chọn hành động cho tin nhắn này:", buttons);
   };
 
+  // Kiểm tra xem tin nhắn này có phải là tin nhắn trả lời không
+  const isReply = item.content.startsWith("@");
+ const repliedMessage = messages.find(msg => msg.messageId === item.replyToMessageId);
+
+let repliedSenderName = "";
+let replyContent = item.content;
+  let repliedText = "";
+if (repliedMessage) {
+  repliedSenderName = repliedMessage.senderId.name || "Không rõ";
+  replyContent = item.content.replace(`@${repliedSenderName}`, "").trim();
+}
+  if (!repliedMessage) {
+        repliedText = item.content.split(" ").slice(1).join(" ") || "Tin nhắn gốc không tìm thấy";
+      } else {
+        repliedText = repliedMessage.content;
+      }
+
   return (
-    <TouchableOpacity onLongPress={handleLongPress}>
+    <TouchableOpacity
+      onLongPress={handleLongPress}
+      {...panResponder.panHandlers}
+    >
       <View
         style={[
           styles.messageContainer,
@@ -677,115 +723,124 @@ const fetchGroupDetails = async () => {
               style={styles.messageAvatar}
             />
           )}
-          <View
-            style={[
-              styles.messageContent,
-              {
-                backgroundColor: isCurrentUser ? "#007AFF" : "#f0f0f0",
-                borderTopLeftRadius: isCurrentUser ? 10 : 0,
-                borderTopRightRadius: isCurrentUser ? 0 : 10,
-              },
-            ]}
-          >
-            {isGroupChat && !isCurrentUser && !isRecalled && (
-              <Text style={styles.senderName}>{item.senderId.name}</Text>
-            )}
-            {isRecalled ? (
-              <Text
-                style={[
-                  styles.messageText,
-                  { color: isCurrentUser ? "#fff" : "#333", fontStyle: "italic" },
-                ]}
-              >
-                Tin nhắn đã được thu hồi
-              </Text>
-            ) : item.image ? (
-              <TouchableOpacity
-                onPress={() => {
-                  const index = imageMessages.findIndex(
-                    (img) => img.url === item.image
-                  );
-                  setCurrentImageIndex(index);
-                  setIsVisible(true);
-                }}
-              >
-                <Image
-                  source={{ uri: item.image }}
-                  style={styles.messageImage}
-                  resizeMode="cover"
-                  onError={(error) =>
-                    console.log("Image load error:", error.nativeEvent)
-                  }
-                />
-              </TouchableOpacity>
-            ) : item.video ? (
-              <Video
-                source={{ uri: item.video }}
-                style={styles.messageVideo}
-                useNativeControls
-                resizeMode={ResizeMode.CONTAIN}
-                isLooping={false}
-                onError={(error) => console.log("Video load error:", error)}
-              />
-            ) : item.fileUrl ? (
-              <TouchableOpacity
-                onPress={() => {
-                  if (item.fileUrl) {
-                    Linking.openURL(item.fileUrl).catch((err) =>
-                      Alert.alert("Lỗi", "Không thể mở tệp.")
-                    );
-                  }
-                }}
-              >
-                <View
+          <View style={{ maxWidth: "70%" }}>
+            {/* Hiển thị hộp thoại trả lời nếu tin nhắn là tin nhắn trả lời */}
+            {isReply && (
+  <View style={styles.replyBox}>
+    <Text style={styles.replySenderName}>@{repliedSenderName}</Text>
+    <Text style={styles.replyText}>
+      {/* Sửa ở đây */}
+      {repliedMessage ? repliedMessage.content : "Tin nhắn gốc không tìm thấy"}
+    </Text>
+  </View>
+)}
+
+            <View
+              style={[
+                styles.messageContent,
+                {
+                  backgroundColor: isCurrentUser ? "#007AFF" : "#f0f0f0",
+                  borderTopLeftRadius: isCurrentUser ? 10 : 0,
+                  borderTopRightRadius: isCurrentUser ? 0 : 10,
+                },
+              ]}
+            >
+              {isGroupChat && !isCurrentUser && !isRecalled && (
+                <Text style={styles.senderName}>{item.senderId.name}</Text>
+              )}
+              {isRecalled ? (
+                <Text
                   style={[
-                    styles.filePreviewContainer,
-                    { backgroundColor: isCurrentUser ? "#005bb5" : "#e0e0e0" },
+                    styles.messageText,
+                    { color: isCurrentUser ? "#fff" : "#333", fontStyle: "italic" },
                   ]}
                 >
-                  <Image
-                    source={{ uri: "https://via.placeholder.com/40?text=PDF" }} // Biểu tượng PDF tạm thời
-                    style={styles.filePreviewIcon}
-                  />
-                  <View style={styles.fileInfo}>
-                    <Text
-                      style={[
-                        styles.fileNameText,
-                        { color: isCurrentUser ? "#fff" : "#333" },
-                      ]}
-                    >
-                      {decodeURIComponent(item.fileName || "Unknown.pdf").split('/').pop() || "Unknown.pdf"}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.fileDetails,
-                        { color: isCurrentUser ? "#ddd" : "#888" },
-                      ]}
-                    >
-                      PDF - {Math.round((item.fileUrl?.length || 0) / 1024)} KB
-                    </Text>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            ) : (
-              <Text
-                style={[
-                  styles.messageText,
-                  { color: isCurrentUser ? "#fff" : "#333" },
-                ]}
-              >
-                {item.content}
-              </Text>
-            )}
-            <View style={styles.messageFooter}>
-              <Text style={[styles.messageTime, { color: isCurrentUser ? "#ddd" : "#888" }]}>
-                {new Date(item.createdAt).toLocaleTimeString()}
-              </Text>
-              {isCurrentUser && !isRecalled && (
-                <Text style={styles.messageStatus}>
-                  {item.isRead ? "Đã đọc" : item.isDelivered ? "Đã gửi" : "Đang gửi"}
+                  Tin nhắn đã được thu hồi
                 </Text>
+              ) : item.image ? (
+                <TouchableOpacity
+                  onPress={() => {
+                    const index = imageMessages.findIndex(
+                      (img) => img.url === item.image
+                    );
+                    setCurrentImageIndex(index);
+                    setIsVisible(true);
+                  }}
+                >
+                  <Image
+                    source={{ uri: item.image }}
+                    style={styles.messageImage}
+                    resizeMode="cover"
+                    onError={(error) =>
+                      console.log("Image load error:", error.nativeEvent)
+                    }
+                  />
+                </TouchableOpacity>
+              ) : item.video ? (
+                <Video
+                  source={{ uri: item.video }}
+                  style={styles.messageVideo}
+                  useNativeControls
+                  resizeMode={ResizeMode.CONTAIN}
+                  isLooping={false}
+                  onError={(error) => console.log("Video load error:", error)}
+                />
+              ) : item.fileUrl ? (
+                <TouchableOpacity
+                  onPress={() => {
+                    if (item.fileUrl) {
+                      Linking.openURL(item.fileUrl).catch((err) =>
+                        Alert.alert("Lỗi", "Không thể mở tệp.")
+                      );
+                    }
+                  }}
+                >
+                  <View
+                    style={[
+                      styles.filePreviewContainer,
+                      { backgroundColor: isCurrentUser ? "#005bb5" : "#e0e0e0" },
+                    ]}
+                  >
+                    <Image
+                      source={{ uri: "https://via.placeholder.com/40?text=PDF" }}
+                      style={styles.filePreviewIcon}
+                    />
+                    <View style={styles.fileInfo}>
+                      <Text
+                        style={[
+                          styles.fileNameText,
+                          { color: isCurrentUser ? "#fff" : "#333" },
+                        ]}
+                      >
+                        {decodeURIComponent(item.fileName || "Unknown.pdf").split('/').pop() || "Unknown.pdf"}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.fileDetails,
+                          { color: isCurrentUser ? "#ddd" : "#888" },
+                        ]}
+                      >
+                        PDF - {Math.round((item.fileUrl?.length || 0) / 1024)} KB
+                      </Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ) : (
+               <Text style={[styles.messageText, { color: isCurrentUser ? "#fff" : "#333" }]}>
+  {isReply ? replyContent : item.content}
+</Text>
+
               )}
+              <View style={styles.messageFooter}>
+                <Text style={[styles.messageTime, { color: isCurrentUser ? "#ddd" : "#888" }]}>
+                  {new Date(item.createdAt).toLocaleTimeString()}
+                </Text>
+                {isCurrentUser && !isRecalled && (
+                  <Text style={styles.messageStatus}>
+                    {item.isRead ? "Đã đọc" : item.isDelivered ? "Đã gửi" : "Đang gửi"}
+                  </Text>
+                )}
+              </View>
             </View>
           </View>
         </View>
@@ -811,73 +866,73 @@ const fetchGroupDetails = async () => {
         keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
       >
         <View style={styles.header}>
-  <Image
-    source={{ uri: avatar || "https://via.placeholder.com/50" }}
-    style={styles.headerAvatar}
-  />
-  <TouchableOpacity
-    onPress={() =>
-      navigation.navigate("ChatInfoScreen", {
-        chatId,
-        name,
-        avatar,
-        isGroupChat,
-        currentUserId,
-        receiverId,
-      })
-    }
-  >
-    <Text style={styles.headerText}>{name}</Text>
-  </TouchableOpacity>
-  {isGroupChat ? (
-    <TouchableOpacity
-      onPress={() => createCall(true)}
-      style={{ marginLeft: "auto" }}
-    >
-      <Ionicons name="videocam-outline" size={24} color="#007AFF" />
-    </TouchableOpacity>
-  ) : (
-    <TouchableOpacity
-      onPress={() => createCall(false)}
-      style={{ marginLeft: "auto" }}
-    >
-      <Ionicons name="videocam-outline" size={24} color="#007AFF" />
-    </TouchableOpacity>
-  )}
-  {isGroupChat && (
-    <TouchableOpacity
-      onPress={() =>
-        navigation.navigate("GroupManagement", {
-          chatId,
-          groupName: name,
-          currentUserId,
-        })
-      }
-      style={{ marginLeft: 10 }}
-    >
-      <Ionicons name="settings-outline" size={24} color="#007AFF" />
-    </TouchableOpacity>
-  )}
-</View>
+          <Image
+            source={{ uri: avatar }}
+            style={styles.headerAvatar}
+          />
+          <TouchableOpacity
+            onPress={() =>
+              navigation.navigate("ChatInfoScreen", {
+                chatId,
+                name,
+                avatar,
+                isGroupChat,
+                currentUserId,
+                receiverId,
+              })
+            }
+          >
+            <Text style={styles.headerText}>{name}</Text>
+          </TouchableOpacity>
+          {isGroupChat ? (
+            <TouchableOpacity
+              onPress={() => createCall(true)}
+              style={{ marginLeft: "auto" }}
+            >
+              <Ionicons name="videocam-outline" size={24} color="#007AFF" />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              onPress={() => createCall(false)}
+              style={{ marginLeft: "auto" }}
+            >
+              <Ionicons name="videocam-outline" size={24} color="#007AFF" />
+            </TouchableOpacity>
+          )}
+          {isGroupChat && (
+            <TouchableOpacity
+              onPress={() =>
+                navigation.navigate("GroupManagement", {
+                  chatId,
+                  groupName: name,
+                  currentUserId,
+                })
+              }
+              style={{ marginLeft: 10 }}
+            >
+              <Ionicons name="settings-outline" size={24} color="#007AFF" />
+            </TouchableOpacity>
+          )}
+        </View>
         {activeCallId && streamToken && (
           <View style={styles.callContainer}>
-        <WebView
-    source={{
-        uri: `https://453d-171-248-108-160.ngrok-free.app/call.html?callId=${activeCallId}&userId=${currentUserId}&token=${streamToken}`,
-    }}
-    userAgent="Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
-    style={{ flex: 1 }}
-    onError={(syntheticEvent) => {
-        const { nativeEvent } = syntheticEvent;
-        console.warn('WebView error: ', nativeEvent);
-        Alert.alert('Lỗi', 'Không thể tải cuộc gọi. Vui lòng kiểm tra kết nối hoặc CSP.');
-    }}
-    onMessage={(event) => {
-        if (event.nativeEvent.data === "call_ended") {
-            endCall(activeCallId);
-        }
-    }}
-/>
+            <WebView
+              source={{
+                uri: `https://453d-171-248-108-160.ngrok-free.app/call.html?callId=${activeCallId}&userId=${currentUserId}&token=${streamToken}`,
+              }}
+              userAgent="Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
+              style={{ flex: 1 }}
+              onError={(syntheticEvent) => {
+                const { nativeEvent } = syntheticEvent;
+                console.warn("WebView error: ", nativeEvent);
+                Alert.alert("Lỗi", "Không thể tải cuộc gọi. Vui lòng kiểm tra kết nối hoặc CSP.");
+              }}
+              onMessage={(event) => {
+                if (event.nativeEvent.data === "call_ended") {
+                  endCall(activeCallId);
+                }
+              }}
+            />
             <TouchableOpacity
               style={styles.endCallButton}
               onPress={() => endCall(activeCallId)}
@@ -898,47 +953,60 @@ const fetchGroupDetails = async () => {
           }}
         />
         <View style={styles.inputContainer}>
-          {selectedFile && (
-            <View style={styles.filePreview}>
-              <Text style={styles.filePreviewText}>
-                {selectedFile.mimeType.startsWith("image/")
-                  ? `Ảnh: ${selectedFile.name}`
-                  : selectedFile.mimeType.startsWith("video/")
-                  ? `Video: ${selectedFile.name}`
-                  : `Tệp: ${selectedFile.name} (${selectedFile.mimeType.split("/").pop()})`}
-              </Text>
-              <TouchableOpacity onPress={() => setSelectedFile(null)}>
-                <Ionicons name="close-circle-outline" size={20} color="#333" />
-              </TouchableOpacity>
-            </View>
-          )}
-          <View style={styles.inputRow}>
-            <TextInput
-              value={content}
-              onChangeText={setContent}
-              placeholder="Nhập tin nhắn..."
-              style={styles.input}
-              editable={!selectedFile}
-            />
-            <TouchableOpacity onPress={handleShowEmoji} style={styles.iconButton}>
-              <Ionicons name="happy-outline" size={24} color="#333" />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={pickImage} style={styles.iconButton}>
-              <Ionicons name="image-outline" size={24} color="#333" />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={pickVideo} style={styles.iconButton}>
-              <Ionicons name="videocam-outline" size={24} color="#333" />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={pickFile} style={styles.iconButton}>
-              <Ionicons name="attach-outline" size={24} color="#333" />
-            </TouchableOpacity>
-            <Button
-              title="Gửi"
-              onPress={sendMessage}
-              disabled={!content.trim() && !selectedFile}
-            />
-          </View>
-        </View>
+  {selectedFile && (
+    <View style={styles.filePreview}>
+      <Text style={styles.filePreviewText}>
+        {selectedFile.mimeType.startsWith("image/")
+          ? `Ảnh: ${selectedFile.name}`
+          : selectedFile.mimeType.startsWith("video/")
+          ? `Video: ${selectedFile.name}`
+          : `Tệp: ${selectedFile.name} (${selectedFile.mimeType.split("/").pop()})`}
+      </Text>
+      <TouchableOpacity onPress={() => setSelectedFile(null)}>
+        <Ionicons name="close-circle-outline" size={20} color="#333" />
+      </TouchableOpacity>
+    </View>
+  )}
+  {replyTo && (
+    <View style={styles.replyPreview}>
+      <Text style={styles.replyText}>
+        Trả lời @{replyTo.senderName}: {replyTo.content}
+      </Text>
+      <Text style={styles.replyInputPreview}>
+        @{replyTo.senderName} {content || ""}
+      </Text>
+      <TouchableOpacity onPress={() => setReplyTo(null)}>
+        <Ionicons name="close-circle-outline" size={20} color="#333" />
+      </TouchableOpacity>
+    </View>
+  )}
+  <View style={styles.inputRow}>
+    <TextInput
+      value={content}
+      onChangeText={setContent}
+      placeholder="Nhập tin nhắn..."
+      style={styles.input}
+      editable={!selectedFile}
+    />
+    <TouchableOpacity onPress={handleShowEmoji} style={styles.iconButton}>
+      <Ionicons name="happy-outline" size={24} color="#333" />
+    </TouchableOpacity>
+    <TouchableOpacity onPress={pickImage} style={styles.iconButton}>
+      <Ionicons name="image-outline" size={24} color="#333" />
+    </TouchableOpacity>
+    <TouchableOpacity onPress={pickVideo} style={styles.iconButton}>
+      <Ionicons name="videocam-outline" size={24} color="#333" />
+    </TouchableOpacity>
+    <TouchableOpacity onPress={pickFile} style={styles.iconButton}>
+      <Ionicons name="attach-outline" size={24} color="#333" />
+    </TouchableOpacity>
+    <Button
+      title="Gửi"
+      onPress={sendMessage}
+      disabled={!content.trim() && !selectedFile}
+    />
+  </View>
+</View>
 
         {showEmojiModal && (
           <EmojiModal
@@ -1007,4 +1075,3 @@ const fetchGroupDetails = async () => {
     </SafeAreaView>
   );
 }
-
