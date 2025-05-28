@@ -13,6 +13,8 @@ const upload = multer({
   { name: 'image', maxCount: 1 },
   { name: 'video', maxCount: 1 },
   { name: 'file', maxCount: 1 },
+  { name: 'images', maxCount: 10 },
+  { name: 'videos', maxCount: 10 } 
 ]);
 
 router.post("/send", authMiddleware, upload, chatController.sendMessage);

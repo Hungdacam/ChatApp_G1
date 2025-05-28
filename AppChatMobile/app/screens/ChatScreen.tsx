@@ -13,6 +13,7 @@ import {
   Platform,
   Linking,
   PanResponder,
+  ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import axios from "axios";
@@ -67,7 +68,7 @@ export default function ChatScreen({ route }) {
   const { chatId, receiverId, name, currentUserId, avatar: initialAvatar, isGroupChat } = route.params;
   const [messages, setMessages] = useState<Message[]>([]);
   const [content, setContent] = useState("");
-  const [selectedFile, setSelectedFile] = useState<{ name: string; uri: string; mimeType: string } | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<Array<{ name: string; uri: string; mimeType: string }>>([]);
   const [avatar, setAvatar] = useState(initialAvatar || "https://via.placeholder.com/50");
   const flatListRef = useRef<FlatList>(null);
   const [showEmojiModal, setShowEmojiModal] = useState(false);
@@ -297,31 +298,21 @@ socket.on("message_unpinned", ({ messageId }) => {
     try {
       const res = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: true, // Cho phép chọn nhiều ảnh
         allowsEditing: false,
         quality: 1,
       });
 
       if (res.canceled) return;
 
-      const file = res.assets[0];
-      if (!file) {
-        Alert.alert("Lỗi", "Không thể lấy thông tin ảnh.");
-        return;
-      }
-
-      const imageSizeLimit = 5 * 1024 * 1024;
-      if (file.fileSize && file.fileSize > imageSizeLimit) {
-        Alert.alert("Lỗi", "Ảnh vượt quá giới hạn 5MB.");
-        return;
-      }
-
-      setSelectedFile({
+      const files = res.assets.map(file => ({
         name: file.fileName || "image.jpg",
         uri: file.uri,
         mimeType: file.mimeType || "image/jpeg",
-      });
+      }));
+
+      setSelectedFiles(files);
     } catch (error) {
-      console.error("Lỗi chọn ảnh:", error);
       Alert.alert("Lỗi", "Không thể chọn ảnh.");
     }
   };
@@ -330,31 +321,21 @@ socket.on("message_unpinned", ({ messageId }) => {
     try {
       const res = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+        allowsMultipleSelection: true, // Cho phép chọn nhiều video
         allowsEditing: false,
         quality: 1,
       });
 
       if (res.canceled) return;
 
-      const file = res.assets[0];
-      if (!file) {
-        Alert.alert("Lỗi", "Không thể lấy thông tin video.");
-        return;
-      }
-
-      const videoSizeLimit = 10 * 1024 * 1024;
-      if (file.fileSize && file.fileSize > videoSizeLimit) {
-        Alert.alert("Lỗi", "Video vượt quá giới hạn 10MB.");
-        return;
-      }
-
-      setSelectedFile({
+      const files = res.assets.map(file => ({
         name: file.fileName || "video.mp4",
         uri: file.uri,
         mimeType: file.mimeType || "video/mp4",
-      });
+      }));
+
+      setSelectedFiles(files);
     } catch (error) {
-      console.error("Lỗi chọn video:", error);
       Alert.alert("Lỗi", "Không thể chọn video.");
     }
   };
@@ -368,6 +349,7 @@ socket.on("message_unpinned", ({ messageId }) => {
 
       if (res.canceled) return;
 
+
       const file = res.assets[0];
       if (!file) {
         Alert.alert("Lỗi", "Không thể lấy thông tin tệp.");
@@ -380,11 +362,11 @@ socket.on("message_unpinned", ({ messageId }) => {
         return;
       }
 
-      setSelectedFile({
+      setSelectedFiles([{
         name: file.name,
         uri: file.uri,
         mimeType: file.mimeType || "application/octet-stream",
-      });
+      }]);
     } catch (error) {
       console.error("Lỗi chọn tệp:", error);
       Alert.alert("Lỗi", "Không thể chọn tệp.");
@@ -399,29 +381,48 @@ socket.on("message_unpinned", ({ messageId }) => {
       const token = await AsyncStorage.getItem("token");
       if (!token) throw new Error("Không tìm thấy token");
       const parsedToken = JSON.parse(token);
-
-      if (selectedFile) {
+      console.log("Selected file:", selectedFiles[0]);
+      if (selectedFiles.length > 0) {
         const formData = new FormData();
         formData.append("chatId", chatId);
         if (receiverId) formData.append("receiverId", receiverId);
 
-        const file = {
-          uri: Platform.OS === "android" && !selectedFile.uri.startsWith("file://")
-            ? `file://${selectedFile.uri}`
-            : selectedFile.uri,
-          type: selectedFile.mimeType || "application/octet-stream",
-          name: selectedFile.name || `file-${Date.now()}`,
-        };
+        const isAllVideo = selectedFiles.every(f => f.mimeType?.startsWith("video/"));
+        const isAllImage = selectedFiles.every(f => f.mimeType?.startsWith("image/"));
 
-        if (selectedFile.mimeType.startsWith("image/")) {
-          formData.append("image", file);
-          formData.append("content", replyTo ? `@${replyTo.senderName} ${content || "[Image]"}` : "[Image]");
-        } else if (selectedFile.mimeType.startsWith("video/")) {
-          formData.append("video", file);
-          formData.append("content", replyTo ? `@${replyTo.senderName} ${content || "[Video]"}` : "[Video]");
+        if (isAllVideo) {
+          selectedFiles.forEach((vid, idx) => {
+            formData.append("videos", {
+              uri: Platform.OS === "android" && !vid.uri.startsWith("file://")
+                ? `file://${vid.uri}`
+                : vid.uri,
+              type: vid.mimeType || "video/mp4",
+              name: vid.name || `video-${idx}.mp4`,
+            });
+          });
+          formData.append("content", replyTo ? `@${replyTo.senderName} [Videos]` : "[Videos]");
+        } else if (isAllImage) {
+          selectedFiles.forEach((img, idx) => {
+            formData.append("images", {
+              uri: Platform.OS === "android" && !img.uri.startsWith("file://")
+                ? `file://${img.uri}`
+                : img.uri,
+              type: img.mimeType || "image/jpeg",
+              name: img.name || `image-${idx}.jpg`,
+            });
+          });
+          formData.append("content", replyTo ? `@${replyTo.senderName} [Images]` : "[Images]");
         } else {
-          formData.append("file", file);
-          formData.append("content", replyTo ? `@${replyTo.senderName} ${content || selectedFile.name}` : selectedFile.name);
+          // Gửi file (PDF, Word, ...)
+          const file = selectedFiles[0]; // Thêm dòng này
+          formData.append("file", {
+            uri: Platform.OS === "android" && !file.uri.startsWith("file://")
+              ? `file://${file.uri}`
+              : file.uri,
+            type: file.mimeType || "application/octet-stream",
+            name: file.name || "file",
+          });
+          formData.append("content", replyTo ? `@${replyTo.senderName} [File]` : "[File]");
         }
 
         await axios.post(`${BASE_URL}/api/chat/send`, formData, {
@@ -431,7 +432,7 @@ socket.on("message_unpinned", ({ messageId }) => {
           },
         });
 
-        setSelectedFile(null);
+        setSelectedFiles([]);
       } else if (content.trim()) {
         await axios.post(
           `${BASE_URL}/api/chat/send`,
@@ -451,11 +452,13 @@ socket.on("message_unpinned", ({ messageId }) => {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 100);
     } catch (error) {
-      console.error("Lỗi gửi:", error.response?.data || error);
-      Alert.alert(
-        "Lỗi",
-        error.response?.data?.message || "Không thể gửi tin nhắn hoặc tệp."
-      );
+      if (error.response) {
+        console.log("Lỗi gửi file:", error.response.data);
+        Alert.alert("Lỗi", error.response.data.message || "Không thể gửi tin nhắn hoặc tệp.");
+      } else {
+        console.log("Lỗi gửi file:", error);
+        Alert.alert("Lỗi", "Không thể gửi tin nhắn hoặc tệp.");
+      }
     } finally {
       setIsSending(false);
     }
@@ -1062,19 +1065,17 @@ if (repliedMessage) {
           }}
         />
         <View style={styles.inputContainer}>
-  {selectedFile && (
-    <View style={styles.filePreview}>
-      <Text style={styles.filePreviewText}>
-        {selectedFile.mimeType.startsWith("image/")
-          ? `Ảnh: ${selectedFile.name}`
-          : selectedFile.mimeType.startsWith("video/")
-          ? `Video: ${selectedFile.name}`
-          : `Tệp: ${selectedFile.name} (${selectedFile.mimeType.split("/").pop()})`}
-      </Text>
-      <TouchableOpacity onPress={() => setSelectedFile(null)}>
-        <Ionicons name="close-circle-outline" size={20} color="#333" />
-      </TouchableOpacity>
-    </View>
+  {selectedFiles.length > 0 && (
+    <ScrollView horizontal style={{ flexDirection: "row", marginBottom: 8 }}>
+      {selectedFiles.map((file, idx) => (
+        <View key={idx} style={styles.filePreview}>
+          <Image source={{ uri: file.uri }} style={{ width: 60, height: 60, borderRadius: 8 }} />
+          <TouchableOpacity onPress={() => setSelectedFiles(selectedFiles.filter((_, i) => i !== idx))}>
+            <Ionicons name="close-circle-outline" size={20} color="#333" />
+          </TouchableOpacity>
+        </View>
+      ))}
+    </ScrollView>
   )}
   {replyTo && (
     <View style={styles.replyPreview}>
@@ -1095,7 +1096,7 @@ if (repliedMessage) {
       onChangeText={setContent}
       placeholder="Nhập tin nhắn..."
       style={styles.input}
-      editable={!selectedFile}
+      editable={selectedFiles.length === 0}
     />
     <TouchableOpacity onPress={handleShowEmoji} style={styles.iconButton}>
       <Ionicons name="happy-outline" size={24} color="#333" />
@@ -1112,7 +1113,7 @@ if (repliedMessage) {
     <Button
       title="Gửi"
       onPress={sendMessage}
-      disabled={!content.trim() && !selectedFile}
+      disabled={!content.trim() && selectedFiles.length === 0}
     />
   </View>
 </View>

@@ -7,14 +7,16 @@ const s3 = require('../config/aws');
 const cloudinary = require('../config/cloudinary');
 
 exports.sendMessage = async (req, res) => {
+  console.log("Request files:", req.files);
   try {
     const senderId = req.user?._id;
     const { chatId, content, receiverId, replyToMessageId } = req.body;
-
+    let imageUrls = [];
     let imageUrl = null;
     let videoUrl = null;
     let fileUrl = null;
     let fileName = null;
+    let videoUrls = [];
 
     console.log("Request body:", req.body);
     console.log("Request files:", req.files);
@@ -25,6 +27,7 @@ exports.sendMessage = async (req, res) => {
     if (
       (!content || content.trim() === "") &&
       !req.files?.image &&
+      !req.files?.images && // Thêm dòng này
       !req.files?.video &&
       !req.files?.file
     ) {
@@ -66,25 +69,53 @@ exports.sendMessage = async (req, res) => {
     }
 
     // Xử lý tệp (AWS S3)
-    if (req.files && req.files.file) {
+    if (req.files && req.files.file && Array.isArray(req.files.file) && req.files.file.length > 0) {
+      const file = req.files.file[0];
+      console.log("Đang upload file lên S3:", file.originalname);
+      const params = {
+        Bucket: process.env.AWS_BUCKET_NAME,
+        Key: `${Date.now()}_${file.originalname}`,
+        Body: file.buffer,
+        ContentType: file.mimetype,
+      };
       try {
-        const fileId = uuidv4();
-        fileName = req.files.file[0].originalname;
-        const fileKey = `chat-files/${fileId}-${fileName}`;
-
-        const params = {
-          Bucket: "app-chat-cnm",
-          Key: fileKey,
-          Body: req.files.file[0].buffer,
-          ContentType: req.files.file[0].mimetype,
-        };
-
         const uploadResult = await s3.upload(params).promise();
         fileUrl = uploadResult.Location;
-        console.log("File uploaded to S3:", fileUrl);
-      } catch (uploadError) {
-        console.error("Lỗi tải tệp:", uploadError);
-        return res.status(500).json({ message: "Lỗi tải tệp lên AWS S3." });
+        fileName = file.originalname;
+        console.log("Upload file thành công:", fileUrl);
+      } catch (err) {
+        console.error("Lỗi upload file lên S3:", err);
+        return res.status(500).json({ message: "Lỗi upload file lên S3", error: err.message });
+      }
+    }
+
+    // Xử lý nhiều ảnh (Cloudinary)
+    if (req.files && req.files.images) {
+      for (const img of req.files.images) {
+        try {
+          const uploadResponse = await cloudinary.uploader.upload(
+            `data:image/jpeg;base64,${img.buffer.toString('base64')}`,
+            { resource_type: 'image' }
+          );
+          imageUrls.push(uploadResponse.secure_url);
+        } catch (uploadError) {
+          console.error("Lỗi tải ảnh:", uploadError);
+        }
+      }
+    }
+
+    // Xử lý nhiều video (Cloudinary)
+    if (req.files && req.files.videos) {
+      for (const vid of req.files.videos) {
+        try {
+          const uploadResponse = await cloudinary.uploader.upload(
+            `data:video/mp4;base64,${vid.buffer.toString('base64')}`,
+            { resource_type: 'video' }
+          );
+          videoUrls.push(uploadResponse.secure_url);
+        } catch (uploadError) {
+          console.error("Lỗi tải video:", uploadError);
+        }
       }
     }
 
@@ -95,6 +126,55 @@ exports.sendMessage = async (req, res) => {
         : imageUrl ? "[Image]"
         : fileUrl ? fileName
         : "");
+
+    if (imageUrls.length > 0) {
+      // LẤY io và onlineUsers TRƯỚC khi emit
+      const io = req.app.get("io");
+      const onlineUsers = req.app.get("onlineUsers");
+      for (const url of imageUrls) {
+        const messageId = uuidv4();
+        const message = new Message({
+          messageId,
+          chatId,
+          senderId,
+          content: contentToSave || "[Image]",
+          image: url,
+          isDelivered: false,
+          isRead: false,
+          createdAt: new Date(),
+          replyToMessageId
+        });
+        await message.save();
+        // emit socket nếu cần
+        const populatedMessage = await Message.findOne({ messageId }).populate("senderId", "name avatar");
+        emitNewMessage(chat, populatedMessage, io, onlineUsers);
+      }
+      return res.status(201).json({ message: "Đã gửi nhiều ảnh" });
+    }
+
+    // Sau đó tạo message cho từng video
+    if (videoUrls.length > 0) {
+      const io = req.app.get("io");
+      const onlineUsers = req.app.get("onlineUsers");
+      for (const url of videoUrls) {
+        const messageId = uuidv4();
+        const message = new Message({
+          messageId,
+          chatId,
+          senderId,
+          content: contentToSave || "[Video]",
+          video: url,
+          isDelivered: false,
+          isRead: false,
+          createdAt: new Date(),
+          replyToMessageId
+        });
+        await message.save();
+        const populatedMessage = await Message.findOne({ messageId }).populate("senderId", "name avatar");
+        emitNewMessage(chat, populatedMessage, io, onlineUsers);
+      }
+      return res.status(201).json({ message: "Đã gửi nhiều video" });
+    }
 
     // Tạo và lưu tin nhắn
     const messageId = uuidv4();
