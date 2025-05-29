@@ -101,28 +101,67 @@ const createCall = async (req, res) => {
 };
 
 // Kết thúc cuộc gọi
+// ✅ Sửa lại endCall function
 const endCall = async (req, res) => {
   try {
     const { callId } = req.params;
     
-    const call = await StreamCall.findOne({ callId });
-    
+   // ✅ Populate participants với User model đã được import
+    const call = await StreamCall.findOne({ callId }).populate('participants', '_id name avatar');
+
     if (!call) {
       return res.status(404).json({ message: 'Không tìm thấy cuộc gọi' });
     }
-    
+
+    // Kiểm tra call đã kết thúc chưa
+    if (call.status === 'ended') {
+      return res.status(200).json({ message: 'Cuộc gọi đã được kết thúc trước đó' });
+    }
+
     call.status = 'ended';
     call.endTime = new Date();
-    call.duration = Math.floor((call.endTime - call.startTime) / 1000);
+    
+    // ✅ Kiểm tra startTime
+    if (call.startTime) {
+      call.duration = Math.floor((call.endTime - call.startTime) / 1000);
+    } else {
+      call.duration = 0;
+      call.startTime = call.createdAt || call.endTime;
+    }
     
     await call.save();
+
+    // ✅ Thông báo cho TẤT CẢ participants qua socket
+    const io = req.app.get('io');
+    const onlineUsers = req.app.get('onlineUsers');
     
+    if (io && call.participants) {
+      console.log("📋 Sending call_ended to participants:", call.participants);
+      
+      call.participants.forEach(participant => {
+        const participantId = participant._id ? participant._id.toString() : participant.toString();
+        const targetSocketId = onlineUsers.get(participantId);
+        
+        if (targetSocketId) {
+          console.log(`📤 API: Gửi call_ended đến user ${participantId}`);
+          io.to(targetSocketId).emit('call_ended', {
+            callId,
+            endedBy: req.user._id,
+            message: 'Cuộc gọi đã kết thúc'
+          });
+        } else {
+          console.log(`❌ API: Không tìm thấy socket của user ${participantId}`);
+        }
+      });
+    }
+
     res.status(200).json({ message: 'Cuộc gọi đã kết thúc' });
   } catch (error) {
     console.error('Error ending call:', error);
     res.status(500).json({ message: 'Không thể kết thúc cuộc gọi' });
   }
 };
+
 
 // Lấy lịch sử cuộc gọi
 const getCallHistory = async (req, res) => {

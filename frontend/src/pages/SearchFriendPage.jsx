@@ -5,7 +5,7 @@ import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom"; // <-- THÊM DÒNG NÀY
 
 const SearchFriendPage = () => {
-  const { findOneUser } = useAuthStore();
+  const { findOneUser, authUser } = useAuthStore();
   const [friendPhone, setFriendPhone] = useState("");
   const navigate = useNavigate(); // <-- HOOK CHUYỂN TRANG
 
@@ -17,12 +17,23 @@ const SearchFriendPage = () => {
       }
 
       const result = await findOneUser(friendPhone);
-      console.log(result);
       if (!result || !result.id || !result.phone) {
-      toast.error("Không tìm thấy người dùng.");
-      return;
-}
-      
+        toast.error("Không tìm thấy người dùng.");
+        return;
+      }
+      // Nếu là chính mình thì chuyển sang trang profile
+      if (
+
+        (authUser && (result.id === authUser._id || result.phone === authUser.phone))
+
+      ) {
+
+        toast.success("Đây là tài khoản của bạn!");
+        navigate("/profile");
+
+        return;
+
+      }
 
       const user = {
         ...result,

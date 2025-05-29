@@ -468,16 +468,31 @@ exports.pinMessage = async (req, res) => {
     message.pinnedBy = userId;
     await message.save();
 
+     const populatedMessage = await Message.findOne({ messageId })
+            .populate('senderId', 'name avatar')
+            .populate('pinnedBy', 'name avatar');
+
     // Phát socket cho các client cập nhật giao diện
     const io = req.app.get("io");
+
+    const roomSize = io.sockets.adapter.rooms.get(message.chatId)?.size || 0;
+        console.log(`📊 Phòng ${message.chatId} có ${roomSize} người`);
+
     io.to(message.chatId).emit("message_pinned", {
   messageId: message.messageId,
   senderName: req.user.name,
   content: message.content,
     fileName: message.fileName, 
+    chatId: message.chatId,
+    pinnedMessage: populatedMessage,
+     pinnedBy: {
+                _id: req.user._id,
+                name: req.user.name,
+                avatar: req.user.avatar
+            }
 });
 
-    res.status(200).json({ message: "Đã ghim tin nhắn", messageId: message.messageId }
+    res.status(200).json({ message: "Đã ghim tin nhắn", messageId: message.messageId, pinnedBy: req.user.name }
       
     );
   } catch (error) {
@@ -486,37 +501,59 @@ exports.pinMessage = async (req, res) => {
   }
 };
 
-// Bỏ ghim tin nhắn
 exports.unpinMessage = async (req, res) => {
-  try {
-    const { messageId } = req.body;
-    const message = await Message.findOne({ messageId });
-    if (!message) return res.status(404).json({ message: "Không tìm thấy tin nhắn." });
+    try {
+        const { messageId } = req.body;
 
-    message.isPinned = false;
-    message.pinnedAt = null;
-    message.pinnedBy = null;
-    await message.save();
+        const message = await Message.findOne({ messageId });
+        if (!message) {
+            return res.status(404).json({ message: "Không tìm thấy tin nhắn." });
+        }
 
-    // Phát socket cho các client cập nhật giao diện
-    const io = req.app.get("io");
-    io.to(message.chatId).emit("message_unpinned", { messageId: message.messageId });
+        // Cập nhật trạng thái bỏ ghim
+        message.isPinned = false;
+        message.pinnedAt = null;
+        message.pinnedBy = null;
+        await message.save();
 
-    res.status(200).json({ message: "Đã bỏ ghim tin nhắn", messageId: message.messageId });
-  } catch (error) {
-    console.error("Lỗi bỏ ghim tin nhắn:", error);
-    res.status(500).json({ message: "Lỗi server" });
-  }
+        // **QUAN TRỌNG: Gửi đến TẤT CẢ client trong phòng chat**
+        const io = req.app.get("io");
+        const roomSize = io.sockets.adapter.rooms.get(message.chatId)?.size || 0;
+        
+        io.to(message.chatId).emit("message_unpinned", {
+            messageId: message.messageId,
+            chatId: message.chatId,
+            unpinnedBy: {
+                _id: req.user._id,
+                name: req.user.name,
+                avatar: req.user.avatar
+            }
+        });
+
+        console.log(`✅ Đã gửi message_unpinned đến ${roomSize} client trong phòng: ${message.chatId}`);
+
+        res.status(200).json({
+            message: "Đã bỏ ghim tin nhắn",
+            messageId: message.messageId
+        });
+    } catch (error) {
+        console.error("Lỗi bỏ ghim tin nhắn:", error);
+        res.status(500).json({ message: "Lỗi server" });
+    }
 };
+
 
 // Lấy danh sách tin nhắn ghim của 1 chat
 exports.getPinnedMessages = async (req, res) => {
-  try {
-    const { chatId } = req.params;
-    const pinnedMessages = await Message.find({ chatId, isPinned: true }).sort({ pinnedAt: -1 });
-    res.status(200).json({ pinnedMessages });
-  } catch (error) {
-    console.error("Lỗi lấy tin nhắn ghim:", error);
-    res.status(500).json({ message: "Lỗi server" });
-  }
+  try {
+    const { chatId } = req.params;
+    const pinnedMessages = await Message.find({ chatId, isPinned: true })
+      .populate('senderId', 'name avatar')
+      .populate('pinnedBy', 'name avatar')
+      .sort({ pinnedAt: -1 });
+    res.status(200).json({ pinnedMessages });
+  } catch (error) {
+    console.error("Lỗi lấy tin nhắn ghim:", error);
+    res.status(500).json({ message: "Lỗi server" });
+  }
 };

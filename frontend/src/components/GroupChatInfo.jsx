@@ -1,98 +1,54 @@
 import React, { useState } from 'react';
 import { useChatStore } from '../store/useChatStore';
 import useAuthStore from '../store/useAuthStore';
-import { X, Upload, UserPlus, UserMinus, Shield, ShieldOff, LogOut, Trash2, Loader2 } from 'lucide-react';
+import { X, Upload, UserPlus, UserMinus, Shield, ShieldOff, LogOut, Trash2, Loader2, Crown } from 'lucide-react';
 import toast from 'react-hot-toast';
 import AddMemberModal from './AddMemberModal';
 import { useMemo } from 'react';
 import { useEffect } from 'react';
-const GroupChatInfo = ({ onClose }) => {
-  // Thêm vào đầu file GroupChatInfo.jsx
-  useEffect(() => {
-    console.log("Store data:", useChatStore.getState());
-    console.log("Auth data:", useAuthStore.getState());
-  }, []);
 
-  const { selectedChat, leaveGroup, removeGroupMember, assignAdmin, removeAdmin, dissolveGroup, updateGroupAvatar } = useChatStore();
+const GroupChatInfo = ({ onClose }) => {
+  const { selectedChat, leaveGroup, removeGroupMember, assignAdmin, removeAdmin, dissolveGroup, updateGroupAvatar, transferGroupOwnership } = useChatStore();
   const { authUser } = useAuthStore();
   
   const [isLoading, setIsLoading] = useState(false);
   const [showAddMember, setShowAddMember] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
-  
-  const isAdmin = useMemo(() => {
-    if (!selectedChat || !authUser || !authUser._id) return false;
-    
-    // Kiểm tra nếu là người tạo nhóm
-    if (selectedChat.createdBy) {
-      // Trường hợp createdBy là object
-      if (typeof selectedChat.createdBy === 'object' && selectedChat.createdBy._id) {
-        if (selectedChat.createdBy._id.toString() === authUser._id.toString()) {
-          return true;
-        }
-      } 
-      // Trường hợp createdBy là string
-      else if (typeof selectedChat.createdBy === 'string') {
-        if (selectedChat.createdBy === authUser._id.toString()) {
-          return true;
-        }
-      }
-      // Trường hợp khác
-      else if (selectedChat.createdBy.toString() === authUser._id.toString()) {
-        return true;
-      }
-    }
-    
-    // Kiểm tra trong danh sách admin
-    if (selectedChat.admins && Array.isArray(selectedChat.admins)) {
-      return selectedChat.admins.some(adminId => {
-        // Trường hợp adminId là object
-        if (typeof adminId === 'object' && adminId._id) {
-          return adminId._id.toString() === authUser._id.toString();
-        }
-        // Trường hợp adminId là string
-        else if (typeof adminId === 'string') {
-          return adminId === authUser._id.toString();
-        }
-        // Trường hợp khác
-        return adminId.toString() === authUser._id.toString();
-      });
-    }
-    
-    return false;
-  }, [selectedChat, authUser]);
-  
-  
-  const isCreator = useMemo(() => {
-    if (!selectedChat || !authUser || !authUser._id) return false;
-    
-    if (!selectedChat.createdBy) return false;
-    
-    // Trường hợp createdBy là object
-    if (typeof selectedChat.createdBy === 'object' && selectedChat.createdBy._id) {
-      return selectedChat.createdBy._id.toString() === authUser._id.toString();
-    }
-    // Trường hợp createdBy là string
-    else if (typeof selectedChat.createdBy === 'string') {
-      return selectedChat.createdBy === authUser._id.toString();
-    }
-    // Trường hợp khác
-    return selectedChat.createdBy.toString() === authUser._id.toString();
-  }, [selectedChat, authUser]);
-  
+  const [showTransferOwnership, setShowTransferOwnership] = useState(null);
 
-  if (!selectedChat || !selectedChat.isGroupChat) return null;
+  useEffect(() => {
+    console.log("Selected chat updated:", selectedChat);
+  }, [selectedChat]);
+
+  const isCreator = useMemo(() => {
+  if (!selectedChat || !authUser?._id || !selectedChat.createdBy) return false;
+  const creatorId = typeof selectedChat.createdBy === 'object' && selectedChat.createdBy._id
+    ? selectedChat.createdBy._id.toString()
+    : selectedChat.createdBy.toString();
+  return creatorId === authUser._id.toString();
+}, [selectedChat, authUser]);
+  const isAdmin = useMemo(() => {
+  if (!selectedChat || !authUser?._id) return false;
+  if (isCreator) return true;
+  if (!selectedChat.admins || !Array.isArray(selectedChat.admins)) return false;
+  return selectedChat.admins.some(adminId => {
+    const adminIdStr = typeof adminId === 'object' && adminId._id
+      ? adminId._id.toString()
+      : adminId.toString();
+    return adminIdStr === authUser._id.toString();
+  });
+}, [selectedChat, authUser, isCreator]);
+  
+  
 
   const handleAvatarChange = async (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Kiểm tra kích thước file
       if (file.size > 5 * 1024 * 1024) {
         toast.error('Kích thước ảnh không được vượt quá 5MB');
         return;
       }
       
-      // Kiểm tra loại file
       if (!file.type.startsWith('image/')) {
         toast.error('Vui lòng chọn file ảnh');
         return;
@@ -100,7 +56,6 @@ const GroupChatInfo = ({ onClose }) => {
       
       setIsLoading(true);
       try {
-        // Gọi hàm updateGroupAvatar từ useChatStore
         await updateGroupAvatar(selectedChat.chatId, file);
         toast.success('Cập nhật avatar nhóm thành công');
       } catch (error) {
@@ -111,8 +66,6 @@ const GroupChatInfo = ({ onClose }) => {
       }
     }
   };
-  
-  
   
   const handleRemoveMember = async (userId) => {
     setIsLoading(true);
@@ -144,9 +97,6 @@ const GroupChatInfo = ({ onClose }) => {
     try {
       console.log("Bắt đầu xóa quyền admin cho:", userId);
       console.log("Chat hiện tại:", selectedChat);
-      // Kiểm tra xem có phải người tạo nhóm không
-      // Kiểm tra xem người bị xóa quyền có phải là người tạo nhóm không
-      // Kiểm tra xem người bị xóa quyền có phải là người tạo nhóm không
       let isUserCreator = false;
       if (selectedChat.createdBy) {
         if (typeof selectedChat.createdBy === 'object' && selectedChat.createdBy._id) {
@@ -172,26 +122,26 @@ const GroupChatInfo = ({ onClose }) => {
     }
   };
   
-  
   const handleCheckBeforeLeave = () => {
-    // Nếu người dùng hiện tại là admin
-    if (isAdmin) {
-      // Đếm số lượng admin trong nhóm
-      const adminCount = selectedChat.admins?.length || 0;
-      
-      // Kiểm tra xem người dùng hiện tại có phải là admin duy nhất không
-      const isLastAdmin = adminCount <= 1;
-      
-      if (isLastAdmin) {
-        toast.error('Bạn là admin duy nhất của nhóm. Vui lòng gán quyền admin cho người khác trước khi rời nhóm.');
-        return;
-      }
+  if (isCreator) {
+    toast.error('Trưởng nhóm không thể rời nhóm. Vui lòng chuyển quyền trưởng nhóm hoặc giải tán nhóm.');
+    return;
+  }
+  if (isAdmin) {
+    const creatorId = typeof selectedChat.createdBy === 'object' && selectedChat.createdBy._id
+      ? selectedChat.createdBy._id.toString()
+      : selectedChat.createdBy.toString();
+    const creatorStillInGroup = selectedChat.participants.some(p => {
+      const participantId = typeof p === 'object' && p._id ? p._id.toString() : p.toString();
+      return participantId === creatorId;
+    });
+    if (!creatorStillInGroup && selectedChat.admins.length <= 1) {
+      toast.error('Bạn là phó nhóm cuối cùng và trưởng nhóm đã rời. Vui lòng gán admin khác trước khi rời.');
+      return;
     }
-    
-    // Nếu không phải admin hoặc có nhiều admin, cho phép rời nhóm
-    setConfirmAction({ type: 'leave' });
-  };
-  
+  }
+  setConfirmAction({ type: 'leave' });
+};
   
   const handleLeaveGroup = async () => {
     setIsLoading(true);
@@ -221,10 +171,24 @@ const GroupChatInfo = ({ onClose }) => {
     }
   };
   
+  const handleTransferOwnership = async (userId) => {
+    setIsLoading(true);
+    try {
+      await transferGroupOwnership(selectedChat.chatId, userId);
+      toast.success('Đã chuyển quyền trưởng nhóm');
+      setShowTransferOwnership(null);
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Lỗi khi chuyển quyền trưởng nhóm');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (!selectedChat || !selectedChat.isGroupChat) return null;
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg w-full max-w-md max-h-[90vh] overflow-y-auto p-4">
-        {/* Header với tiêu đề và nút đóng */}
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-bold">Thông tin nhóm</h2>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
@@ -232,7 +196,6 @@ const GroupChatInfo = ({ onClose }) => {
           </button>
         </div>
         
-        {/* Phần avatar và tên nhóm */}
         <div className="flex flex-col items-center mb-6">
           <div className="relative mb-2">
             <img
@@ -257,7 +220,6 @@ const GroupChatInfo = ({ onClose }) => {
           <p className="text-gray-500">{selectedChat.participants.length} thành viên</p>
         </div>
         
-        {/* Nút thêm thành viên (chỉ hiển thị cho admin) */}
         {isAdmin && (
           <div className="mb-4">
             <button
@@ -271,7 +233,6 @@ const GroupChatInfo = ({ onClose }) => {
           </div>
         )}
         
-        {/* Danh sách thành viên */}
         <div className="mb-4">
           <h4 className="font-medium mb-2">Thành viên nhóm</h4>
           <div className="border rounded-md divide-y">
@@ -286,16 +247,14 @@ const GroupChatInfo = ({ onClose }) => {
                   <div className="font-medium">{member.name}</div>
                   <div className="text-sm text-gray-500">
                     {(() => {
-                      // Kiểm tra người tạo
                       if (typeof selectedChat.createdBy === 'object' && selectedChat.createdBy._id) {
                         if (selectedChat.createdBy._id.toString() === member._id.toString()) {
-                          return 'Người tạo';
+                          return 'Trưởng nhóm';
                         }
                       } else if (selectedChat.createdBy?.toString() === member._id.toString()) {
-                        return 'Người tạo';
+                        return 'Trưởng nhóm';
                       }
                       
-                      // Kiểm tra admin
                       if (selectedChat.admins && Array.isArray(selectedChat.admins)) {
                         const isAdmin = selectedChat.admins.some(adminId => {
                           if (typeof adminId === 'object' && adminId._id) {
@@ -304,56 +263,75 @@ const GroupChatInfo = ({ onClose }) => {
                           return adminId?.toString() === member._id.toString();
                         });
                         
-                        if (isAdmin) return 'Admin';
+                        if (isAdmin) return 'Phó nhóm';
                       }
                       
                       return '';
                     })()}
                   </div>
-
                 </div>
                 
                 {isAdmin && member._id !== authUser._id && (
                   <div className="flex gap-1">
                     {isCreator && (
                       (() => {
-                        if (!selectedChat.admins) return false;
-                        
-                        return selectedChat.admins.some(adminId => {
-                          if (typeof adminId === 'object' && adminId._id) {
-                            return adminId._id.toString() === member._id.toString();
-                          }
-                          return adminId?.toString() === member._id.toString();
+                        const isMemberAdmin = selectedChat.admins?.some(adminId => {
+                          const adminIdStr = typeof adminId === 'object' && adminId._id
+                            ? adminId._id.toString()
+                            : adminId.toString();
+                          return adminIdStr === member._id.toString();
                         });
-                      })() ? (
-                        <button
-                          onClick={() => handleRemoveAdmin(member._id)}
-                          className="p-1 text-gray-500 hover:text-gray-700"
-                          title="Xóa quyền admin"
-                          disabled={isLoading}
-                        >
-                          <ShieldOff size={18} />
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => handleAssignAdmin(member._id)}
-                          className="p-1 text-gray-500 hover:text-gray-700"
-                          title="Gán quyền admin"
-                          disabled={isLoading}
-                        >
-                          <Shield size={18} />
-                        </button>
-                      )
+
+                        return isMemberAdmin ? (
+                          <button
+                            onClick={() => handleRemoveAdmin(member._id)}
+                            className="p-1 text-gray-500 hover:text-gray-700"
+                            title="Xóa quyền admin"
+                            disabled={isLoading}
+                          >
+                            <ShieldOff size={18} />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleAssignAdmin(member._id)}
+                            className="p-1 text-gray-500 hover:text-gray-700"
+                            title="Gán quyền admin"
+                            disabled={isLoading}
+                          >
+                            <Shield size={18} />
+                          </button>
+                        );
+                      })()
                     )}
-                    
-                    <button
-                      onClick={() => setConfirmAction({ type: 'remove', userId: member._id, name: member.name })}
-                      className="p-1 text-red-500 hover:text-red-700"
-                      title="Xóa khỏi nhóm"
-                      disabled={isLoading}
-                    >
-                      <UserMinus size={18} />
-                    </button>
+                    {(isCreator || (!isCreator && !selectedChat.admins?.some(adminId => {
+                      const adminIdStr = typeof adminId === 'object' && adminId._id
+                        ? adminId._id.toString()
+                        : adminId.toString();
+                      return adminIdStr === member._id.toString();
+                    }) && !(
+                      typeof selectedChat.createdBy === 'object' && selectedChat.createdBy._id
+                        ? selectedChat.createdBy._id.toString() === member._id.toString()
+                        : selectedChat.createdBy.toString() === member._id.toString()
+                    ))) && (
+                      <button
+                        onClick={() => setConfirmAction({ type: 'remove', userId: member._id, name: member.name })}
+                        className="p-1 text-red-500 hover:text-red-700"
+                        title="Xóa khỏi nhóm"
+                        disabled={isLoading}
+                      >
+                        <UserMinus size={18} />
+                      </button>
+                    )}
+                    {isCreator && member._id !== authUser._id && (
+                      <button
+                        onClick={() => setShowTransferOwnership({ userId: member._id, name: member.name })}
+                        className="p-1 text-yellow-500 hover:text-yellow-600 transfer-ownership-btn"
+                        title="Chuyển quyền trưởng nhóm"
+                        disabled={isLoading}
+                      >
+                        <Crown size={18} />
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -361,7 +339,6 @@ const GroupChatInfo = ({ onClose }) => {
           </div>
         </div>
         
-        {/* Nút rời nhóm hoặc giải tán nhóm */}
         <div className="mt-6">
           {isCreator ? (
             <button
@@ -384,7 +361,6 @@ const GroupChatInfo = ({ onClose }) => {
           )}
         </div>
         
-        {/* Modal thêm thành viên */}
         {showAddMember && (
           <AddMemberModal
             chatId={selectedChat.chatId}
@@ -393,7 +369,6 @@ const GroupChatInfo = ({ onClose }) => {
           />
         )}
         
-        {/* Modal xác nhận các hành động */}
         {confirmAction && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg p-4 max-w-sm w-full">
@@ -443,9 +418,34 @@ const GroupChatInfo = ({ onClose }) => {
             </div>
           </div>
         )}
+        
+        {showTransferOwnership && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-4 max-w-sm w-full">
+              <h3 className="text-lg font-semibold mb-2">Xác nhận chuyển quyền</h3>
+              <p>Bạn có chắc muốn chuyển quyền trưởng nhóm cho {showTransferOwnership.name}?</p>
+              <div className="flex justify-end gap-2 mt-4">
+                <button
+                  onClick={() => setShowTransferOwnership(null)}
+                  className="px-3 py-1 border rounded-md"
+                  disabled={isLoading}
+                >
+                  Hủy
+                </button>
+                <button
+                  onClick={() => handleTransferOwnership(showTransferOwnership.userId)}
+                  className="px-3 py-1 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 disabled:opacity-50 transfer-ownership-confirm-btn"
+                  disabled={isLoading}
+                >
+                  {isLoading ? <Loader2 size={16} className="animate-spin" /> : 'Xác nhận'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
-  
 }
+
 export default GroupChatInfo;

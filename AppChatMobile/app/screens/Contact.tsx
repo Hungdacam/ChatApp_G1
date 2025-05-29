@@ -541,7 +541,12 @@ useEffect(() => {
       style={styles.requestItem}
       onPress={() => {
         navigation.navigate("UserProfile", {
-          userId: item._id,
+          user: {
+            id: item._id,
+            name: item.name,
+            phone: item.phone,
+            avatar: item.avatar,
+          },
         });
       }}
     >
@@ -615,7 +620,6 @@ useEffect(() => {
                     name: item.name || item.contactName,
                     phone: item.phone,
                     avatar: item.avatar,
-                    dob: item.dob
                   },
                 })
               }

@@ -91,11 +91,11 @@ const [pinNotification, setPinNotification] = useState<{ senderName: string; con
  const pinnedMessages = messages.filter(msg => msg.isPinned);
     useEffect(() => {
   // Join phòng chat khi vào màn hình
-  socket.emit("join_chat", { chatId });
+  socket.emit("join_chat", chatId); // chatId phải là string
 
   return () => {
     // Rời phòng chat khi thoát màn hình
-    socket.emit("leave_chat", { chatId });
+    socket.emit("leave_chat", chatId);
   };
 }, [chatId]);
   // Lấy Stream token

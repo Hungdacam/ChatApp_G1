@@ -1,6 +1,6 @@
 // src/components/Navbar.jsx
 import { Link, useNavigate } from "react-router-dom";
-import { LogOut, MessageSquare, Settings, UserPlus, Users } from "lucide-react";
+import { ContactIcon, LogOut, MessageSquare, Settings, UserPlus, Users } from "lucide-react";
 import useAuthStore from "../store/useAuthStore";
 import { useFriendStore } from "../store/useFriendStore";
 import { useEffect } from "react";
@@ -39,10 +39,13 @@ const Navbar = () => {
 
           {authUser ? (
             <div className="flex items-center gap-2">
-              <Link to="/settings" className="btn btn-sm gap-2 transition-colors">
-                <Settings className="w-4 h-4" />
-                <span className="hidden sm:inline">Settings</span>
-              </Link>
+              <Link
+  to="/friends"
+  className="btn btn-sm gap-2"
+>
+  <ContactIcon size={20} />
+  <span className="hidden sm:inline">Danh sách bạn bè</span>
+</Link>
 
               <Link to="/search" className="btn btn-sm gap-2">
                 <UserPlus className="size-5" />

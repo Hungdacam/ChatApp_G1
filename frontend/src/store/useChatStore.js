@@ -9,6 +9,7 @@ export const useChatStore = create((set, get) => ({
   isMessagesLoading: false,
   error: null,
   hasAttemptedInitialFetch: false,
+  pinnedMessages: [],
   // Thêm các state mới cho chat nhóm
   isCreatingGroup: false,
   isAddingMember: false,
@@ -62,7 +63,17 @@ export const useChatStore = create((set, get) => ({
     
     // Tìm chat đầy đủ từ danh sách chats
     const fullChat = validChats.find(c => c.chatId === chat.chatId) || chat;
-    
+    axios.get(`/chat/${chat.chatId}`)
+    .then(response => {
+      if (response.data && response.data.chat) {
+        set({ selectedChat: response.data.chat });
+      } else {
+        set({ selectedChat: fullChat });
+      }
+    })
+    .catch(() => {
+      set({ selectedChat: fullChat });
+    });
     console.log("Selecting chat:", fullChat);
     console.log("createdBy:", fullChat.createdBy);
     console.log("admins:", fullChat.admins);
@@ -89,7 +100,7 @@ export const useChatStore = create((set, get) => ({
     }
   },
   
-  sendMessage: async ({ chatId, content, image, video }) => {
+  sendMessage: async ({ chatId, content, image, video , file }) => {
     const tempId = `temp-${Date.now()}`;
     const userId = localStorage.getItem("userId");
     
@@ -98,6 +109,7 @@ export const useChatStore = create((set, get) => ({
     if (content) formData.append("content", content);
     if (image) formData.append("image", image);
     if (video) formData.append("video", video);
+    if (file) formData.append("file", file);
     
     const tempMessage = {
       messageId: tempId,
@@ -136,17 +148,25 @@ export const useChatStore = create((set, get) => ({
         if (!content) tempMessage.content = "[Video]";
       }
       
+       // Xử lý preview cho file
+      if (file) {
+        tempMessage.fileName = file.name;
+        tempMessage.fileSize = file.size;
+        if (!content) tempMessage.content = file.name;
+      }
+
       const { messages } = get();
-      const existingSimilarMsg = messages.find(msg => 
-        msg.content === tempMessage.content && 
+      const existingSimilarMsg = messages.find(msg =>
+        msg.content === tempMessage.content &&
         msg.senderId._id === tempMessage.senderId._id &&
-        !msg.isPending && 
+        !msg.isPending &&
         Math.abs(new Date(msg.createdAt) - new Date(tempMessage.createdAt)) < 5000
       );
-      
+
       if (!existingSimilarMsg) {
         set({ messages: [...messages, tempMessage] });
       }
+
       
       const response = await axios.post("/chat/send", formData, {
         headers: {
@@ -180,71 +200,7 @@ export const useChatStore = create((set, get) => ({
     }
   },
   
-  sendFile: async ({ chatId, file }) => {
-    const tempId = `temp-${Date.now()}`;
-    const userId = localStorage.getItem("userId");
-    
-    const formData = new FormData();
-    formData.append("chatId", chatId);
-    formData.append("file", file);
-    
-    const tempMessage = {
-      messageId: tempId,
-      chatId,
-      senderId: {
-        _id: userId,
-        name: localStorage.getItem("userName") || "Tôi",
-        avatar: localStorage.getItem("userAvatar") || "https://via.placeholder.com/50"
-      },
-      content: file.name,
-      fileName: file.name,
-      fileSize: file.size,
-      createdAt: new Date().toISOString(),
-      isRead: false,
-      isPending: true,
-    };
-    
-    const { messages } = get();
-    set({ messages: [...messages, tempMessage] });
-    
-    try {
-      const response = await axios.post("/chat/send-file", formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-      
-      console.log("Kết quả gửi file:", response.data);
-      
-      const serverMessage = response.data;
-      const updatedMessages = get().messages.map(msg => 
-        msg.messageId === tempId 
-          ? { 
-              ...serverMessage, 
-              messageId: serverMessage.messageId,
-              fileName: serverMessage.fileName || file.name,
-              fileSize: file.size,
-              fileUrl: serverMessage.fileUrl,
-              isPending: false
-            } 
-          : msg
-      );
-      
-      set({ messages: updatedMessages });
-      return response.data;
-    } catch (error) {
-      console.error("Lỗi khi gửi file:", error);
-      
-      const updatedMessages = get().messages.map(msg =>
-        msg.messageId === tempId
-          ? { ...msg, isError: true, isPending: false }
-          : msg
-      );
-      set({ messages: updatedMessages });
-      
-      throw error;
-    }
-  },
+  
 
   addMessage: (message) => {
     const { messages, selectedChat, chats, getMessages } = get();
@@ -298,7 +254,7 @@ export const useChatStore = create((set, get) => ({
       if (chat.chatId === message.chatId) {
         return {
           ...chat,
-          lastMessage: message.content || "[Media]",
+          lastMessage: message.content || (message.fileUrl ? "[File]" : message.image ? "[Image]" : message.video ? "[Video]" : "[Media]"),
           updatedAt: message.createdAt
         };
       }
@@ -398,15 +354,41 @@ export const useChatStore = create((set, get) => ({
 
       console.log("Kết quả tạo nhóm:", response.data);
       
-      // Cập nhật danh sách chat với nhóm mới
-      const { chats } = get();
-      const newGroup = response.data.chat;
+     
+       // Sử dụng chat đầy đủ từ response nếu có
+      const newGroup = response.data.chat || {
+        chatId: response.data.chatId,
+        groupName: groupName,
+        avatar: response.data.avatar,
+        participants: [...memberIds, localStorage.getItem("userId")],
+        isGroupChat: true,
+        createdBy: localStorage.getItem("userId"),
+        admins: [localStorage.getItem("userId")],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+       // Đảm bảo nhóm có thuộc tính isGroupChat
+      newGroup.isGroupChat = true;
+
+       // Cập nhật danh sách chat với nhóm mới
+       const { chats } = get();
+      // Kiểm tra xem nhóm đã tồn tại trong danh sách chưa
+      const existingChat = chats.find(chat => chat.chatId === newGroup.chatId);
       
-      set({
-        chats: [newGroup, ...chats],
-        selectedChat: newGroup,
-        isCreatingGroup: false
-      });
+      if (!existingChat) {
+        // Chỉ thêm vào nếu chưa tồn tại
+        set({
+          chats: [newGroup, ...chats],
+          selectedChat: newGroup,
+          isCreatingGroup: false
+        });
+      } else {
+        // Nếu đã tồn tại, chỉ cập nhật selectedChat
+        set({
+          selectedChat: existingChat,
+          isCreatingGroup: false
+        });
+      }
       
       return newGroup;
     } catch (error) {
@@ -459,6 +441,7 @@ export const useChatStore = create((set, get) => ({
   addGroupMember: async (chatId, userId) => {
     set({ isAddingMember: true, error: null });
     try {
+       await get().refreshChatList(true);
       const currentUserId = localStorage.getItem("userId");
       
       // Kiểm tra quyền admin
@@ -477,62 +460,71 @@ export const useChatStore = create((set, get) => ({
       const { chats, selectedChat } = get();
       
       // Nếu server trả về chat đầy đủ, sử dụng nó
-      let updatedChat;
       if (response.data.chat) {
-        updatedChat = {
+        const updatedChat = {
           ...response.data.chat,
           isGroupChat: true,
           chatId: chatId // Đảm bảo chatId luôn có
         };
-      } else {
-        // Nếu không, tự tạo updatedChat từ dữ liệu hiện có
-        const chatToUpdate = chats.find(chat => chat.chatId === chatId);
-        if (!chatToUpdate) {
-          throw new Error("Không tìm thấy chat với ID: " + chatId);
-        }
         
-        // Tìm thông tin người dùng được thêm vào
-        const user = await axios.get(`/user/${userId}`).then(res => res.data.user).catch(() => null);
+        // Cập nhật danh sách chats
+        const updatedChats = chats.map(chat =>
+          chat.chatId === chatId ? updatedChat : chat
+        );
         
-        const updatedParticipants = [...chatToUpdate.participants];
-        const userExists = updatedParticipants.some(p => {
-          if (typeof p === 'object' && p._id) {
-            return p._id.toString() === userId.toString();
-          }
-          return p.toString() === userId.toString();
+        set({
+          chats: updatedChats,
+          selectedChat: selectedChat?.chatId === chatId ? updatedChat : selectedChat,
+          isAddingMember: false
         });
         
-        if (!userExists) {
-          if (user) {
-            updatedParticipants.push({
-              _id: userId,
-              name: user.name,
-              avatar: user.avatar
-            });
-          } else {
-            updatedParticipants.push(userId);
-          }
-        }
-        
-        updatedChat = {
-          ...chatToUpdate,
-          participants: updatedParticipants,
-          isGroupChat: true,
-          updatedAt: new Date().toISOString()
-        };
+        return updatedChat;
       }
       
-      // Cập nhật danh sách chats
-      const updatedChats = chats.map(chat => 
-        chat.chatId === chatId ? updatedChat : chat
-      );
+      // Nếu không có chat đầy đủ, tự cập nhật
+      const chatToUpdate = chats.find(chat => chat.chatId === chatId);
+      if (!chatToUpdate) {
+        throw new Error("Không tìm thấy chat với ID: " + chatId);
+      }
+      
+      // Tìm thông tin người dùng được thêm vào
+      const user = await axios.get(`/user/${userId}`).then(res => res.data.user).catch(() => null);
+      
+      const updatedParticipants = [...chatToUpdate.participants];
+      const userExists = updatedParticipants.some(p => {
+        if (typeof p === 'object' && p._id) {
+          return p._id.toString() === userId.toString();
+        }
+        return p.toString() === userId.toString();
+      });
+      
+      if (!userExists) {
+        if (user) {
+          updatedParticipants.push({
+            _id: userId,
+            name: user.name,
+            avatar: user.avatar
+          });
+        } else {
+          updatedParticipants.push(userId);
+        }
+      }
+      
+      const updatedChat = {
+        ...chatToUpdate,
+        participants: updatedParticipants,
+        isGroupChat: true,
+        updatedAt: new Date().toISOString()
+      };
+      
+      
       
       set({
-        chats: updatedChats,
+        chats: updatedChat,
         selectedChat: selectedChat?.chatId === chatId ? updatedChat : selectedChat,
         isAddingMember: false
       });
-      
+      await get().refreshChatList(true);
       return updatedChat;
     } catch (error) {
       console.error("Lỗi khi thêm thành viên:", error);
@@ -543,8 +535,7 @@ export const useChatStore = create((set, get) => ({
       throw error;
     }
   },
-  
-  
+    
   removeGroupMember: async (chatId, userId) => {
     set({ isRemovingMember: true, error: null });
     try {
@@ -617,28 +608,36 @@ export const useChatStore = create((set, get) => ({
   
   
   leaveGroup: async (chatId) => {
-    set({ isRemovingMember: true, error: null });
-    try {
-      await axios.post("/group/leave", { chatId });
-      
-      // Xóa nhóm khỏi danh sách chat
-      const { chats, selectedChat } = get();
-      const updatedChats = chats.filter(chat => chat.chatId !== chatId);
-      
-      set({
-        chats: updatedChats,
-        selectedChat: selectedChat?.chatId === chatId ? null : selectedChat,
-        isRemovingMember: false
-      });
-    } catch (error) {
-      console.error("Lỗi khi rời nhóm:", error);
-      set({
-        error: error.response?.data?.message || "Lỗi khi rời nhóm",
-        isRemovingMember: false
-      });
-      throw error;
+  set({ isRemovingMember: true, error: null });
+  try {
+    const currentUserId = localStorage.getItem("userId");
+    const { chats } = get();
+    const chat = chats.find(c => c.chatId === chatId);
+    if (!chat) {
+      throw new Error("Không tìm thấy nhóm");
     }
-  },
+    const creatorId = typeof chat.createdBy === 'object' && chat.createdBy._id
+      ? chat.createdBy._id.toString()
+      : chat.createdBy.toString();
+    if (creatorId === currentUserId) {
+      throw new Error("Trưởng nhóm không thể rời nhóm. Vui lòng chuyển quyền hoặc giải tán nhóm.");
+    }
+    await axios.post("/group/leave", { chatId });
+    const updatedChats = chats.filter(chat => chat.chatId !== chatId);
+    set({
+      chats: updatedChats,
+      selectedChat: get().selectedChat?.chatId === chatId ? null : get().selectedChat,
+      isRemovingMember: false,
+    });
+  } catch (error) {
+    console.error("Lỗi khi rời nhóm:", error);
+    set({
+      error: error.response?.data?.message || "Lỗi khi rời nhóm",
+      isRemovingMember: false,
+    });
+    throw error;
+  }
+},
   
   assignAdmin: async (chatId, userId) => {
     set({ error: null });
@@ -788,47 +787,34 @@ export const useChatStore = create((set, get) => ({
   
   
   dissolveGroup: async (chatId) => {
-    set({ error: null });
-    try {
-      const currentUserId = localStorage.getItem("userId");
-      const { chats } = get();
-      const chat = chats.find(c => c.chatId === chatId);
-      
-      // Kiểm tra xem người dùng có phải là người tạo nhóm không
-      if (!chat || !chat.createdBy) {
-        throw new Error("Không tìm thấy thông tin nhóm");
-      }
-      
-      let isCreator = false;
-      if (typeof chat.createdBy === 'object' && chat.createdBy._id) {
-        isCreator = chat.createdBy._id.toString() === currentUserId.toString();
-      } else if (typeof chat.createdBy === 'string') {
-        isCreator = chat.createdBy === currentUserId;
-      } else {
-        isCreator = chat.createdBy.toString() === currentUserId.toString();
-      }
-      
-      if (!isCreator) {
-        throw new Error("Chỉ người tạo nhóm mới có quyền giải tán nhóm");
-      }
-      await axios.post("/group/dissolve", { chatId });
-      
-      // Xóa nhóm khỏi danh sách chat
-      const {selectedChat } = get();
-      const updatedChats = chats.filter(chat => chat.chatId !== chatId);
-      
-      set({
-        chats: updatedChats,
-        selectedChat: selectedChat?.chatId === chatId ? null : selectedChat
-      });
-    } catch (error) {
-      console.error("Lỗi khi giải tán nhóm:", error);
-      set({
-        error: error.response?.data?.message || "Lỗi khi giải tán nhóm"
-      });
-      throw error;
+  set({ error: null });
+  try {
+    const currentUserId = localStorage.getItem("userId");
+    const { chats } = get();
+    const chat = chats.find(c => c.chatId === chatId);
+    if (!chat || !chat.createdBy) {
+      throw new Error("Không tìm thấy thông tin nhóm");
     }
-  },
+    const creatorId = typeof chat.createdBy === 'object' && chat.createdBy._id
+      ? chat.createdBy._id.toString()
+      : chat.createdBy.toString();
+    if (creatorId !== currentUserId) {
+      throw new Error("Chỉ trưởng nhóm mới có quyền giải tán nhóm");
+    }
+    await axios.post("/group/dissolve", { chatId });
+    const updatedChats = chats.filter(chat => chat.chatId !== chatId);
+    set({
+      chats: updatedChats,
+      selectedChat: get().selectedChat?.chatId === chatId ? null : get().selectedChat,
+    });
+  } catch (error) {
+    console.error("Lỗi khi giải tán nhóm:", error);
+    set({
+      error: error.response?.data?.message || "Lỗi khi giải tán nhóm",
+    });
+    throw error;
+  }
+},
   
   updateGroupAvatar: async (chatId, avatarFile) => {
     set({ isUpdatingAvatar: true, error: null });
@@ -887,6 +873,195 @@ export const useChatStore = create((set, get) => ({
       });
       throw error;
     }
-  }
-  
+  },
+    transferGroupOwnership: async (chatId, newCreatorId) => {
+    set({ error: null });
+    try {
+      const currentUserId = localStorage.getItem("userId");
+      const { chats } = get();
+      const chat = chats.find(c => c.chatId === chatId);
+
+      if (!chat || !chat.createdBy) {
+        throw new Error("Không tìm thấy thông tin nhóm");
+      }
+
+      let isCreator = false;
+      if (typeof chat.createdBy === 'object' && chat.createdBy._id) {
+        isCreator = chat.createdBy._id.toString() === currentUserId.toString();
+      } else if (typeof chat.createdBy === 'string') {
+        isCreator = chat.createdBy === currentUserId;
+      } else {
+        isCreator = chat.createdBy.toString() === currentUserId.toString();
+      }
+
+      if (!isCreator) {
+        throw new Error("Chỉ người tạo nhóm mới có quyền chuyển quyền trưởng nhóm");
+      }
+
+      const response = await axios.post("/group/transfer-ownership", { chatId, newCreatorId });
+
+      if (!response.data) {
+        throw new Error("Không nhận được dữ liệu từ server");
+      }
+
+      const { selectedChat } = get();
+      const updatedChat = {
+        ...response.data.chat,
+        isGroupChat: true,
+        chatId: chatId,
+      };
+
+      const updatedChats = chats.map((chat) =>
+        chat.chatId === chatId ? updatedChat : chat
+      );
+
+      set({
+        chats: updatedChats,
+        selectedChat: selectedChat?.chatId === chatId ? updatedChat : selectedChat,
+      });
+
+      return updatedChat;
+    } catch (error) {
+      console.error("Lỗi khi chuyển quyền:", error);
+      set({
+        error: error.response?.data?.message || "Lỗi khi chuyển quyền trưởng nhóm",
+      });
+      throw error;
+    }
+  },
+  selectChat: (chat) => {
+    if (!chat || !chat.chatId) {
+        console.error("Không thể chọn chat không hợp lệ:", chat);
+        return;
+    }
+
+    const { selectedChat } = get();
+    
+    // Leave phòng chat cũ nếu có
+    if (selectedChat?.chatId && window.socketInstance) {
+        window.socketInstance.emit("leave_chat", selectedChat.chatId);
+        console.log("Left chat room:", selectedChat.chatId);
+    }
+
+    const { chats } = get();
+    const validChats = chats.filter(c => c !== undefined && c !== null);
+    const fullChat = validChats.find(c => c.chatId === chat.chatId) || chat;
+
+    // Set selectedChat trước để UI phản hồi nhanh
+    set({ selectedChat: fullChat });
+
+    // **QUAN TRỌNG: Join phòng chat TRƯỚC khi fetch dữ liệu**
+    if (window.socketInstance) {
+        window.socketInstance.emit("join_chat", chat.chatId);
+        console.log("✅ Emitted join_chat for:", chat.chatId);
+        
+        // Đợi một chút để đảm bảo đã join thành công
+        setTimeout(() => {
+            // Fetch dữ liệu sau khi đã join phòng
+            get().fetchPinnedMessages(chat.chatId);
+        }, 100);
+    }
+
+    // Fetch thông tin chat đầy đủ từ server
+    axios.get(`/chat/${chat.chatId}`)
+        .then(response => {
+            if (response.data && response.data.chat) {
+                set({ selectedChat: response.data.chat });
+            } else {
+                set({ selectedChat: fullChat });
+            }
+        })
+        .catch((error) => {
+            console.error("Lỗi khi fetch chat info:", error);
+            set({ selectedChat: fullChat });
+        });
+},
+
+// Thêm hàm pinMessage
+pinMessage: async (messageId) => {
+    console.log("Đang ghim messageId:", messageId);
+    if (!messageId) {
+        throw new Error("messageId không được để trống");
+    }
+    try {
+        const response = await axios.post('/chat/pin', { messageId });
+        console.log("Kết quả ghim:", response.data);
+        // Làm mới danh sách tin nhắn ghim ngay sau khi ghim thành công
+        const { selectedChat } = get();
+        if (selectedChat && selectedChat.chatId) {
+            await get().fetchPinnedMessages(selectedChat.chatId);
+        }
+        return response.data;
+    } catch (error) {
+        console.error("Lỗi khi ghim tin nhắn:", error.response?.data || error.message);
+        throw error;
+    }
+},
+
+// Thêm hàm unpinMessage
+unpinMessage: async (messageId) => {
+    console.log("Đang bỏ ghim messageId:", messageId);
+    if (!messageId) {
+        throw new Error("messageId không được để trống");
+    }
+    try {
+        const response = await axios.post('/chat/unpin', { messageId });
+        console.log("Kết quả bỏ ghim:", response.data);
+        // Làm mới danh sách tin nhắn ghim ngay sau khi bỏ ghim thành công
+        const { selectedChat } = get();
+        if (selectedChat && selectedChat.chatId) {
+            await get().fetchPinnedMessages(selectedChat.chatId);
+        }
+        return response.data;
+    } catch (error) {
+        console.error("Lỗi khi bỏ ghim tin nhắn:", error.response?.data || error.message);
+        throw error;
+    }
+},
+
+
+updateMessagePinStatus: (messageId, isPinned, pinnedBy) => {
+  const { messages } = get();
+  
+  const updatedMessages = messages.map(msg => {
+    if (msg.messageId === messageId) {
+      return {
+        ...msg,
+        isPinned: isPinned,
+        pinnedBy: pinnedBy,
+        pinnedAt: isPinned ? new Date() : null
+      };
+    }
+    return msg;
+  });
+  
+  set({ messages: updatedMessages });
+},
+
+updatePinnedMessages: (messageId, action, pinnedMessage = null) => {
+  const { pinnedMessages } = get();
+  
+  if (action === 'pin' && pinnedMessage) {
+    // Thêm tin nhắn vào danh sách ghim nếu chưa có
+    const exists = pinnedMessages.find(msg => msg.messageId === messageId);
+    if (!exists) {
+      set({ pinnedMessages: [...pinnedMessages, pinnedMessage] });
+    }
+  } else if (action === 'unpin') {
+    // Xóa tin nhắn khỏi danh sách ghim
+    const updatedPinnedMessages = pinnedMessages.filter(msg => msg.messageId !== messageId);
+    set({ pinnedMessages: updatedPinnedMessages });
+  }
+},
+  fetchPinnedMessages: async (chatId) => {
+  try {
+    console.log("Đang fetch pinnedMessages cho chatId:", chatId);
+    const res = await axios.get(`/chat/${chatId}/pinned`);
+    console.log("Kết quả fetch pinnedMessages:", res.data);
+    set({ pinnedMessages: res.data.pinnedMessages });
+  } catch (error) {
+    console.error("Lỗi khi fetch pinnedMessages:", error);
+    set({ pinnedMessages: [] });
+  }
+},
 }));

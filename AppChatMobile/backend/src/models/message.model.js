@@ -16,7 +16,6 @@ const messageSchema = new mongoose.Schema({
   replyToMessageId: { type: String, default: null },
 isPinned: { type: Boolean, default: false },
   pinnedAt: { type: Date },
-  pinnedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" }
+  pinnedBy: { type: mongoose.Schema.Types.ObjectId, ref: "user" }
 });
-
 module.exports = mongoose.model('Message', messageSchema);

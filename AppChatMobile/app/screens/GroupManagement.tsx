@@ -28,7 +28,7 @@ export default function GroupManagement({ route }) {
   const [selectedNewCreator, setSelectedNewCreator] = useState(null);
   const navigation = useNavigation();
   const routeInfo = useRoute();
-
+const isAdminOrCreator = admins.includes(currentUserId) || creatorId === currentUserId;
   useFocusEffect(
     useCallback(() => {
       fetchGroupDetails();
@@ -442,20 +442,22 @@ export default function GroupManagement({ route }) {
           </TouchableOpacity>
           <Text style={{ fontSize: 20, fontWeight: "bold" }}>{groupName}</Text>
         </View>
-        <TouchableOpacity
-          style={{
-            backgroundColor: "#007AFF",
-            padding: 12,
-            borderRadius: 8,
-            alignItems: "center",
-            marginBottom: 12,
-          }}
-          onPress={() => navigation.navigate("AddGroupMember", { chatId })}
-        >
-          <Text style={{ color: "#fff", fontSize: 16, fontWeight: "600" }}>
-            Thêm thành viên
-          </Text>
-        </TouchableOpacity>
+       {isAdminOrCreator && (
+  <TouchableOpacity
+    style={{
+      backgroundColor: "#007AFF",
+      padding: 12,
+      borderRadius: 8,
+      alignItems: "center",
+      marginBottom: 12,
+    }}
+    onPress={() => navigation.navigate("AddGroupMember", { chatId })}
+  >
+    <Text style={{ color: "#fff", fontSize: 16, fontWeight: "600" }}>
+      Thêm thành viên
+    </Text>
+  </TouchableOpacity>
+)}
         {creatorId === currentUserId && (
           <TouchableOpacity
             style={{

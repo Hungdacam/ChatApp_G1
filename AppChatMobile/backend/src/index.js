@@ -1,4 +1,3 @@
-
 const express = require('express');
 const authRoutes = require('./routes/auth.route');
 const messageRoutes = require('./routes/message.route');
@@ -32,6 +31,12 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+require('./models/user.model');
+require('./models/message.model');
+require('./models/chat.model');
+require('./models/friendship.model');
+require('./models/call.model');
+
 // 🚀 Đăng ký các route
 app.use('/api/auth', authRoutes);
 app.use('/api/message', messageRoutes);
@@ -60,21 +65,54 @@ io.on('connection', (socket) => {
         console.log("📨 Nhận từ client test-client:", data);
         socket.emit("test-server", { message: "Server nhận được!", original: data });
     });
-socket.on("join_chat", ({ chatId }) => {
+socket.on("join_chat", (data) => {
+    const chatId = typeof data === "string" ? data : data.chatId;
     socket.join(chatId);
     console.log(`Socket ${socket.id} đã join phòng chat ${chatId}`);
-  });
-    socket.on("leave_chat", ({ chatId }) => {
+});
+    socket.on("leave_chat", (data) => {
+    const chatId = typeof data === "string" ? data : data.chatId;
     socket.leave(chatId);
     console.log(`Socket ${socket.id} đã rời phòng chat ${chatId}`);
-  });
-    socket.on("register", (userId) => {
+});
+    socket.on("register", async (userId) => {
         onlineUsers.set(userId, socket.id);
         console.log("📥 Nhận được register:", userId);
         console.log(`📌 Đã lưu user ${userId} với socket ${socket.id}`);
         console.log("🗺️ Danh sách onlineUsers:", [...onlineUsers.entries()]);
         // Emit sự kiện online_users cho tất cả client
         io.emit("online_users", [...onlineUsers.entries()]);
+         try {
+          const user = require('./models/user.model');
+          const Chat = require('./models/chat.model');
+          
+          // Tìm các group mà user này là thành viên
+          const userChats = await Chat.find({
+            participants: userId,
+            isGroupChat: true
+          });
+          
+          // Kiểm tra các group có cuộc gọi đang diễn ra không
+          for (const chat of userChats) {
+            const activeCall = await StreamCall.findOne({
+              chatId: chat.chatId,
+              status: 'active',
+              isGroupCall: true
+            }).populate('participants', 'name', 'user');
+            
+            if (activeCall && !activeCall.participants.some(p => p._id.toString() === userId)) {
+              // Gửi thông báo về cuộc gọi đang diễn ra
+              socket.emit("active_group_call_notification", {
+                callId: activeCall.callId,
+                groupName: chat.groupName || chat.name,
+                participants: activeCall.participants,
+                chatId: chat.chatId
+              });
+            }
+          }
+        } catch (error) {
+          console.error("Lỗi khi kiểm tra cuộc gọi đang diễn ra:", error);
+        }
     });
 
     socket.on('disconnect', () => {
@@ -126,64 +164,267 @@ socket.on("join_chat", ({ chatId }) => {
   }
 });
 // Xử lý khi người dùng kết thúc cuộc gọi
-socket.on("end_call", (data) => {
-  console.log("📞 Nhận sự kiện end_call:", data);
-  const { callId } = data;
-  
-  // Tìm cuộc gọi trong database
-  StreamCall.findOne({ callId })
-    .then(call => {
-      if (call) {
-        // Cập nhật trạng thái cuộc gọi
+socket.on("end_call", async (data) => {
+    console.log("📞 Nhận sự kiện end_call:", data);
+    const { callId } = data;
+    
+    try {
+        // ✅ Kiểm tra call tồn tại trước
+        const call = await StreamCall.findOne({ callId }).populate('participants', '_id name avatar');
+        
+        if (!call || call.status === 'ended') {
+            console.log("⚠️ Call đã kết thúc hoặc không tồn tại");
+            return;
+        }
+        
+        // ✅ Cập nhật database trước
         call.status = 'ended';
         call.endTime = new Date();
-        call.duration = Math.floor((call.endTime - call.startTime) / 1000);
+        if (call.startTime) {
+            call.duration = Math.floor((call.endTime - call.startTime) / 1000);
+        } else {
+            call.duration = 0;
+            call.startTime = call.createdAt || call.endTime;
+        }
+        
+        // ✅ Đợi save hoàn thành
+        await call.save();
+        
+        // ✅ Sau đó mới gửi thông báo
+        if (call.participants) {
+            call.participants.forEach(participant => {
+                const participantId = participant._id ? participant._id.toString() : participant.toString();
+                const targetSocketId = findUserSocket(participantId);
+                if (targetSocketId) {
+                    console.log(`📤 Gửi thông báo call_ended đến user ${participantId}`);
+                    io.to(targetSocketId).emit("call_ended", {
+                        callId,
+                        endedBy: socket.userId || 'unknown',
+                        message: 'Cuộc gọi đã kết thúc'
+                    });
+                }
+            });
+        }
+        
+    } catch (error) {
+        console.error("❌ Lỗi khi xử lý end_call:", error);
+    }
+});
+
+socket.on("call_busy", async (data) => {
+  console.log("📞 Nhận sự kiện call_busy:", data);
+  const { callId, callerId, receiverName } = data;
+  
+  try {
+    // Lưu thông tin cuộc gọi bị từ chối vì bận
+    const call = await StreamCall.findOne({ callId });
+    if (call) {
+      call.status = "busy";
+      call.endTime = new Date();
+      call.busyReason = "receiver_in_another_call";
+      await call.save();
+    }
+    
+    // Gửi thông báo busy về cho người gọi
+    const callerSocketId = findUserSocket(callerId);
+    if (callerSocketId) {
+      io.to(callerSocketId).emit("call_busy_response", {
+        callId,
+        receiverName,
+        message: `${receiverName} đang trong cuộc gọi khác`
+      });
+    }
+    
+    console.log(`📞 Đã thông báo busy cho caller ${callerId}`);
+    
+  } catch (error) {
+    console.error("Lỗi khi xử lý call_busy:", error);
+  }
+});
+
+// Khi cuộc gọi được chấp nhận
+socket.on("call_accepted", (data) => {
+  console.log("📞 Cuộc gọi được chấp nhận:", data);
+  const { callId } = data;
+  
+  StreamCall.findOne({ callId })
+    .then(call => {
+      if (call && call.status === 'ringing') {
+        call.status = 'active';
+        call.startTime = new Date();
         call.save();
         
-        // Thông báo cho tất cả người tham gia
+        // Thông báo cho tất cả participants
         call.participants.forEach(userId => {
           const targetSocketId = findUserSocket(userId.toString());
           if (targetSocketId) {
-            console.log(`📤 Gửi thông báo call_ended đến user ${userId}`);
-            io.to(targetSocketId).emit("call_ended", { callId });
+            io.to(targetSocketId).emit("call_started", { callId });
           }
         });
-      } else {
-        console.log("⚠️ Không tìm thấy cuộc gọi với ID:", callId);
-      }
-    })
-    .catch(err => console.error("Lỗi khi tìm cuộc gọi:", err));
-});
-
-// Xử lý khi người dùng từ chối cuộc gọi
-socket.on("reject_call", (data) => {
-  console.log("📞 Nhận sự kiện reject_call:", data);
-  const { callId, callerId } = data;
-  // Thông báo cho người gọi
-  if (callerId) {
-    const callerSocketId = findUserSocket(callerId);
-    if (callerSocketId) {
-      console.log(`📤 Gửi thông báo call_rejected đến người gọi ${callerId}`);
-      io.to(callerSocketId).emit("call_rejected", {
-        callId,
-        message: "Cuộc gọi đã bị từ chối"
-      });
-    } else {
-      console.log(`❌ Không tìm thấy socket của người gọi ${callerId}`);
-    }
-  }
-  
-  // Cập nhật trạng thái cuộc gọi trong database
-  StreamCall.findOne({ callId })
-    .then(call => {
-      if (call) {
-        call.status = 'missed';
-        call.endTime = new Date();
-        call.save();
       }
     })
     .catch(err => console.error("Lỗi khi cập nhật trạng thái cuộc gọi:", err));
-}); 
+});
+// Cập nhật reject_call
+socket.on("reject_call", async (data) => {
+  console.log("📞 Nhận sự kiện reject_call:", data);
+  const { callId, callerId, reason, message } = data;
+
+  try {
+    const call = await StreamCall.findOne({ callId });
+    if (call) {
+      call.status = reason === "busy" ? "busy" : "rejected";
+      call.endTime = new Date();
+      await call.save();
+
+      // Thông báo cho người gọi
+      const callerSocketId = findUserSocket(callerId);
+      if (callerSocketId) {
+        io.to(callerSocketId).emit("call_rejected", {
+          callId,
+          reason,
+          message: message || "Cuộc gọi đã bị từ chối"
+        });
+      }
+
+      // Thông báo kết thúc cuộc gọi cho tất cả participants
+      call.participants.forEach(userId => {
+        const targetSocketId = findUserSocket(userId.toString());
+        if (targetSocketId) {
+          io.to(targetSocketId).emit("call_ended", { callId });
+        }
+      });
+    }
+  } catch (error) {
+    console.error("Lỗi khi xử lý reject_call:", error);
+  }
+});
+
+
+ // 1. Xử lý group call
+  socket.on("start_group_call", async (data) => {
+    console.log("📞 Nhận sự kiện start_group_call:", data);
+    const { callId, chatId, callerId, isGroupCall } = data;
+    
+    try {
+      // Lấy thông tin group chat
+      const Chat = require('./models/chat.model');
+      const User = require('./models/user.model');
+      
+      const chat = await Chat.findOne({ chatId }).populate('participants', 'name avatar');
+      const callerUser = await User.findById(callerId);
+      
+      if (!chat || !chat.isGroupChat) {
+        console.error("Group chat không tồn tại");
+        return;
+      }
+      
+      const caller = {
+        _id: callerId,
+        name: callerUser?.name || "Người dùng",
+        avatar: callerUser?.avatar || "/avatar.png"
+      };
+      
+      // ✅ Gửi cả participants đầy đủ và participantIds
+    const participantIds = chat.participants.map(p => p._id.toString());
+
+    chat.participants.forEach(participant => {
+      const participantId = participant._id.toString();
+      if (participantId !== callerId) {
+        const targetSocketId = findUserSocket(participantId);
+        if (targetSocketId) {
+          console.log(`📲 Gửi group call đến user ${participantId}`);
+          io.to(targetSocketId).emit("incoming_group_call", {
+            callId,
+            caller,
+            groupName: chat.groupName || chat.name,
+            chatId,
+            isGroupCall: true,
+            participants: participantIds, // ✅ Gửi array string IDs
+            participantDetails: chat.participants // ✅ Gửi thêm chi tiết nếu cần
+          });
+          }
+        }
+      });
+    } catch (error) {
+      console.error("Lỗi khi xử lý group call:", error);
+    }
+  });
+
+  // 2. Xử lý khi có người tham gia group call
+  socket.on("join_group_call", async (data) => {
+    console.log("📞 Nhận sự kiện join_group_call:", data);
+    const { callId, userId, userName } = data;
+    
+    try {
+      const call = await StreamCall.findOne({ callId });
+      if (call) {
+        // Thông báo cho các thành viên khác
+        call.participants.forEach(participantId => {
+          const targetSocketId = findUserSocket(participantId.toString());
+          if (targetSocketId && participantId.toString() !== userId) {
+            io.to(targetSocketId).emit("user_joined_call", {
+              callId,
+              userId,
+              userName
+            });
+          }
+        });
+      }
+    } catch (error) {
+      console.error("Lỗi khi xử lý join group call:", error);
+    }
+  });
+
+  // 3. Xử lý khi có người rời group call
+  socket.on("leave_group_call", async (data) => {
+    console.log("📞 Nhận sự kiện leave_group_call:", data);
+    const { callId, userId, userName } = data;
+    
+    try {
+      const call = await StreamCall.findOne({ callId });
+      if (call) {
+        // Thông báo cho các thành viên khác
+        call.participants.forEach(participantId => {
+          const targetSocketId = findUserSocket(participantId.toString());
+          if (targetSocketId && participantId.toString() !== userId) {
+            io.to(targetSocketId).emit("user_left_call", {
+              callId,
+              userId,
+              userName
+            });
+          }
+        });
+      }
+    } catch (error) {
+      console.error("Lỗi khi xử lý leave group call:", error);
+    }
+  });
+
+  // 4. Xử lý từ chối group call
+  socket.on("reject_group_call", async (data) => {
+    console.log("📞 Nhận sự kiện reject_group_call:", data);
+    const { callId, userId, userName } = data;
+    
+    try {
+      const call = await StreamCall.findOne({ callId });
+      if (call) {
+        // Thông báo cho người tạo cuộc gọi
+        const creatorSocketId = findUserSocket(call.initiator.toString());
+        if (creatorSocketId) {
+          io.to(creatorSocketId).emit("group_call_rejected", {
+            callId,
+            userId,
+            userName,
+            message: `${userName} đã từ chối tham gia group call`
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Lỗi khi xử lý reject group call:", error);
+    }
+  });
+
 
 
 function findUserSocket(userId) {
