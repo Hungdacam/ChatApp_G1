@@ -1,3 +1,4 @@
+
 import { create } from "zustand";
 import axios from '../lib/axios'
 
@@ -50,38 +51,6 @@ export const useChatStore = create((set, get) => ({
 
   setHasAttemptedFetch: (value) => set({ hasAttemptedFetch: value }),
   
-  selectChat: (chat) => {
-    if (!chat || !chat.chatId) {
-      console.error("Không thể chọn chat không hợp lệ:", chat);
-      return;
-    }
-    
-    const { chats } = get();
-    
-    // Lọc bỏ các phần tử undefined trước khi tìm kiếm
-    const validChats = chats.filter(c => c !== undefined && c !== null);
-    
-    // Tìm chat đầy đủ từ danh sách chats
-    const fullChat = validChats.find(c => c.chatId === chat.chatId) || chat;
-    axios.get(`/chat/${chat.chatId}`)
-    .then(response => {
-      if (response.data && response.data.chat) {
-        set({ selectedChat: response.data.chat });
-      } else {
-        set({ selectedChat: fullChat });
-      }
-    })
-    .catch(() => {
-      set({ selectedChat: fullChat });
-    });
-    console.log("Selecting chat:", fullChat);
-    console.log("createdBy:", fullChat.createdBy);
-    console.log("admins:", fullChat.admins);
-    
-    set({ selectedChat: fullChat });
-  },
-  
-  
   
   getMessages: async (chatId) => {
     set({ isMessagesLoading: true, error: null });
@@ -100,17 +69,137 @@ export const useChatStore = create((set, get) => ({
     }
   },
   
-  sendMessage: async ({ chatId, content, image, video , file }) => {
-    const tempId = `temp-${Date.now()}`;
-    const userId = localStorage.getItem("userId");
-    
-    const formData = new FormData();
-    formData.append("chatId", chatId);
-    if (content) formData.append("content", content);
-    if (image) formData.append("image", image);
-    if (video) formData.append("video", video);
-    if (file) formData.append("file", file);
-    
+sendMessage: async ({ chatId, content, image, video, file, images, videos, isForwarded, originalMessage }) => {
+  const tempId = `temp-${Date.now()}`;
+  const userId = localStorage.getItem("userId");
+
+  // XỬ LÝ CHUYỂN TIẾP (chỉ giữ 1 lần)
+  if (isForwarded && originalMessage) {
+    try {
+      console.log("Đang chuyển tiếp tin nhắn:", originalMessage);
+      
+      const response = await axios.post("/chat/send", {
+        chatId,
+        content: content || "",
+        isForwarded: true,
+        originalMessage: {
+          messageId: originalMessage.messageId,
+          content: originalMessage.content,
+          image: originalMessage.image,
+          video: originalMessage.video,
+          fileUrl: originalMessage.fileUrl,
+          fileName: originalMessage.fileName,
+          fileSize: originalMessage.fileSize,
+          senderId: originalMessage.senderId
+        }
+      }, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      console.log("Chuyển tiếp thành công:", response.data);
+      return response.data;
+    } catch (error) {
+      console.error("Lỗi chi tiết khi chuyển tiếp:", {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+        url: error.config?.url
+      });
+      throw error;
+    }
+  }
+  
+  const formData = new FormData();
+  formData.append("chatId", chatId);
+  if (content) formData.append("content", content);
+  
+  // Single files
+  if (image) formData.append("image", image);
+  if (video) formData.append("video", video);
+  if (file) formData.append("file", file);
+  
+  // Multiple files - THÊM MỚI
+  if (images && images.length > 0) {
+    images.forEach((img) => {
+      formData.append("images", img);
+    });
+  }
+  
+  if (videos && videos.length > 0) {
+    videos.forEach((vid) => {
+      formData.append("videos", vid);
+    });
+  }
+
+  // Tạo temp messages cho multiple files
+  const tempMessages = [];
+  
+  // Xử lý multiple images
+  if (images && images.length > 0) {
+    for (let i = 0; i < images.length; i++) {
+      const tempMessage = {
+        messageId: `${tempId}-img-${i}`,
+        chatId,
+        content: content || "[Image]",
+        senderId: {
+          _id: userId,
+          name: localStorage.getItem("userName") || "Tôi",
+          avatar: localStorage.getItem("userAvatar") || "https://via.placeholder.com/50"
+        },
+        createdAt: new Date().toISOString(),
+        isRead: false,
+        isTemp: true,
+        isPending: true,
+        status: 'PENDING'
+      };
+      
+      // Preview ảnh
+      tempMessage.image = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(images[i]);
+      });
+      
+      tempMessages.push(tempMessage);
+    }
+  }
+  
+  // Xử lý multiple videos
+  if (videos && videos.length > 0) {
+    for (let i = 0; i < videos.length; i++) {
+      const tempMessage = {
+        messageId: `${tempId}-vid-${i}`,
+        chatId,
+        content: content || "[Video]",
+        senderId: {
+          _id: userId,
+          name: localStorage.getItem("userName") || "Tôi",
+          avatar: localStorage.getItem("userAvatar") || "https://via.placeholder.com/50"
+        },
+        createdAt: new Date().toISOString(),
+        isRead: false,
+        isTemp: true,
+        isPending: true,
+        status: 'PENDING'
+      };
+      
+      // Preview video
+      tempMessage.video = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(videos[i]);
+      });
+      
+      tempMessages.push(tempMessage);
+    }
+  }
+  
+  // Single file temp message (giữ nguyên logic cũ)
+  if (!images && !videos) {
     const tempMessage = {
       messageId: tempId,
       chatId,
@@ -122,7 +211,7 @@ export const useChatStore = create((set, get) => ({
       },
       createdAt: new Date().toISOString(),
       isRead: false,
-      isTemp: true, // Thêm flag để đánh dấu đây là tin nhắn tạm thời
+      isTemp: true,
       isPending: true,
       status: 'PENDING'
     };
@@ -148,85 +237,101 @@ export const useChatStore = create((set, get) => ({
         if (!content) tempMessage.content = "[Video]";
       }
       
-       // Xử lý preview cho file
       if (file) {
         tempMessage.fileName = file.name;
         tempMessage.fileSize = file.size;
         if (!content) tempMessage.content = file.name;
       }
-
-      const { messages } = get();
-      const existingSimilarMsg = messages.find(msg =>
-        msg.content === tempMessage.content &&
-        msg.senderId._id === tempMessage.senderId._id &&
-        !msg.isPending &&
-        Math.abs(new Date(msg.createdAt) - new Date(tempMessage.createdAt)) < 5000
-      );
-
-      if (!existingSimilarMsg) {
-        set({ messages: [...messages, tempMessage] });
-      }
-
       
-      const response = await axios.post("/chat/send", formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-      
-      const serverMessage = response.data;
-      // Cập nhật tin nhắn tạm thời với messageId thực tế từ server
-      const updatedMessages = get().messages.filter(msg => msg.messageId !== tempId);
-      const completeServerMessage = {
-        ...serverMessage,
-        status: 'SENT',
-        _processed: true // Đánh dấu đã xử lý để tránh trùng lặp
-      };
-      set({ messages: [...updatedMessages, completeServerMessage] });
-      serverMessage._processed = true;
-      return response.data;
+      tempMessages.push(tempMessage);
     } catch (error) {
-      console.error("Lỗi khi gửi tin nhắn:", error);
-      
-      const { messages } = get();
-      const updatedMessages = messages.map(msg =>
-        msg.messageId === tempId
-          ? { ...msg, isError: true, isPending: false }
-          : msg
-      );
-      set({ messages: updatedMessages });
-      
-      throw error;
+      console.error("Error creating temp message:", error);
     }
-  },
+  }
+  
+  // Thêm temp messages vào state
+  const { messages } = get();
+  set({ messages: [...messages, ...tempMessages] });
+  
+  try {
+    const response = await axios.post("/chat/send", formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    
+    // Xóa temp messages
+    const tempIds = tempMessages.map(msg => msg.messageId);
+    const updatedMessages = get().messages.filter(msg => !tempIds.includes(msg.messageId));
+    set({ messages: updatedMessages });
+    
+    return response.data;
+  } catch (error) {
+    console.error("Lỗi khi gửi tin nhắn:", error);
+    
+    // Cập nhật temp messages thành error state
+    const { messages } = get();
+    const updatedMessages = messages.map(msg => {
+      if (tempMessages.some(temp => temp.messageId === msg.messageId)) {
+        return { ...msg, isError: true, isPending: false };
+      }
+      return msg;
+    });
+    set({ messages: updatedMessages });
+    
+    throw error;
+  }
+},
   
   
 
   addMessage: (message) => {
     const { messages, selectedChat, chats, getMessages } = get();
     const userId = localStorage.getItem("userId");
+    // Kiểm tra tin nhắn có nội dung
     const hasContent = message.content || message.image || message.video || message.fileUrl;
-    
     if (!hasContent && selectedChat && message.chatId === selectedChat.chatId) {
-      console.warn("Tin nhắn thiếu nội dung, gọi lại getMessages:", message);
-      getMessages(message.chatId);
-      return;
+        console.warn("Tin nhắn thiếu nội dung, gọi lại getMessages:", message);
+        getMessages(message.chatId);
+        return;
     }
     // Kiểm tra xem tin nhắn này có phải do người dùng hiện tại gửi không
   const isSentByCurrentUser = message.senderId && message.senderId._id === userId;
   
   // Tìm tin nhắn trùng lặp hoặc tin nhắn tạm thời tương ứng
-  const existingMsgIndex = messages.findIndex(m => 
-    // Kiểm tra trùng ID
-    (m.messageId === message.messageId && message.messageId) || 
-    (m._id === message._id && message._id) ||
-    // Kiểm tra tin nhắn tạm thời
-    (isSentByCurrentUser && 
-     m.content === message.content && 
-     m.senderId._id === message.senderId._id &&
-     Math.abs(new Date(m.createdAt) - new Date(message.createdAt)) < 10000 &&
-     (m.isPending || m.messageId.startsWith('temp-')))
-  );
+ const existingMsgIndex = messages.findIndex(m => {
+        // Ưu tiên kiểm tra messageId
+        if (message.messageId && m.messageId === message.messageId) {
+            return true;
+        }
+        
+        // Kiểm tra _id
+        if (message._id && m._id === message._id) {
+            return true;
+        }
+        
+        // ✅ SỬA: Kiểm tra tin nhắn tạm thời cho hình ảnh
+        if (isSentByCurrentUser && m.isPending) {
+            // Đối với hình ảnh, kiểm tra cả content và image preview
+            const isSameImageMessage = (
+                m.image && message.image && 
+                (m.image === message.image || // Cùng URL
+                 (m.content === "[Image]" && message.content === "[Image]")) &&
+                Math.abs(new Date(m.createdAt) - new Date(message.createdAt)) < 5000
+            );
+            
+            // Đối với text, kiểm tra content
+            const isSameTextMessage = (
+                !m.image && !message.image &&
+                m.content === message.content &&
+                Math.abs(new Date(m.createdAt) - new Date(message.createdAt)) < 5000
+            );
+            
+            return isSameImageMessage || isSameTextMessage;
+        }
+        
+        return false;
+    });
     
     let updatedMessages = [...messages];
     
@@ -241,7 +346,8 @@ export const useChatStore = create((set, get) => ({
         fileName: message.fileName || updatedMessages[existingMsgIndex].fileName,
         fileSize: updatedMessages[existingMsgIndex].fileSize,
         isPending: false,
-        isError: false
+        isError: false,
+        status: 'SENT'
       };
     } else if (selectedChat && message.chatId === selectedChat.chatId) {
       // Thêm tin nhắn mới nếu không trùng
@@ -930,138 +1036,145 @@ export const useChatStore = create((set, get) => ({
     }
   },
   selectChat: (chat) => {
-    if (!chat || !chat.chatId) {
-        console.error("Không thể chọn chat không hợp lệ:", chat);
-        return;
-    }
+  if (!chat || !chat.chatId) {
+    console.error("Không thể chọn chat không hợp lệ:", chat);
+    return;
+  }
 
-    const { selectedChat } = get();
-    
-    // Leave phòng chat cũ nếu có
-    if (selectedChat?.chatId && window.socketInstance) {
-        window.socketInstance.emit("leave_chat", selectedChat.chatId);
-        console.log("Left chat room:", selectedChat.chatId);
-    }
+  const { selectedChat } = get();
+  const currentUserId = localStorage.getItem("userId");
+  
+  // Leave phòng chat cũ nếu có
+  if (selectedChat?.chatId && window.socketInstance) {
+    window.socketInstance.emit("leave_chat", selectedChat.chatId);
+  }
 
-    const { chats } = get();
-    const validChats = chats.filter(c => c !== undefined && c !== null);
-    const fullChat = validChats.find(c => c.chatId === chat.chatId) || chat;
+  const { chats } = get();
+  const validChats = chats.filter(c => c !== undefined && c !== null);
+  const fullChat = validChats.find(c => c.chatId === chat.chatId) || chat;
 
-    // Set selectedChat trước để UI phản hồi nhanh
-    set({ selectedChat: fullChat });
+  // ✅ Thêm currentUserId vào chat object
+  const chatWithUserId = {
+    ...fullChat,
+    currentUserId: currentUserId,
+    isGroupChat: fullChat.isGroupChat
+  };
 
-    // **QUAN TRỌNG: Join phòng chat TRƯỚC khi fetch dữ liệu**
-    if (window.socketInstance) {
-        window.socketInstance.emit("join_chat", chat.chatId);
-        console.log("✅ Emitted join_chat for:", chat.chatId);
-        
-        // Đợi một chút để đảm bảo đã join thành công
-        setTimeout(() => {
-            // Fetch dữ liệu sau khi đã join phòng
-            get().fetchPinnedMessages(chat.chatId);
-        }, 100);
-    }
+  // Set selectedChat với currentUserId
+  set({ selectedChat: chatWithUserId });
 
-    // Fetch thông tin chat đầy đủ từ server
-    axios.get(`/chat/${chat.chatId}`)
-        .then(response => {
-            if (response.data && response.data.chat) {
-                set({ selectedChat: response.data.chat });
-            } else {
-                set({ selectedChat: fullChat });
-            }
-        })
-        .catch((error) => {
-            console.error("Lỗi khi fetch chat info:", error);
-            set({ selectedChat: fullChat });
-        });
+  // Join phòng chat mới
+  if (window.socketInstance) {
+    window.socketInstance.emit("join_chat", chat.chatId);
+    setTimeout(() => {
+      get().fetchPinnedMessages(chat.chatId);
+    }, 100);
+  }
+
+  // Fetch thông tin chat đầy đủ từ server
+  axios.get(`/chat/${chat.chatId}`)
+    .then(response => {
+      if (response.data && response.data.chat) {
+        const updatedChat = {
+          ...response.data.chat,
+          currentUserId: currentUserId, // ✅ Đảm bảo có currentUserId
+          chatId: chat.chatId,
+          isGroupChat: response.data.chat.isGroupChat || chat.isGroupChat
+        };
+        set({ selectedChat: updatedChat });
+      }
+    })
+    .catch((error) => {
+      console.error("Lỗi khi fetch chat info:", error);
+      set({ selectedChat: chatWithUserId });
+    });
 },
 
 // Thêm hàm pinMessage
 pinMessage: async (messageId) => {
-    console.log("Đang ghim messageId:", messageId);
-    if (!messageId) {
-        throw new Error("messageId không được để trống");
-    }
-    try {
-        const response = await axios.post('/chat/pin', { messageId });
-        console.log("Kết quả ghim:", response.data);
-        // Làm mới danh sách tin nhắn ghim ngay sau khi ghim thành công
-        const { selectedChat } = get();
-        if (selectedChat && selectedChat.chatId) {
-            await get().fetchPinnedMessages(selectedChat.chatId);
-        }
-        return response.data;
-    } catch (error) {
-        console.error("Lỗi khi ghim tin nhắn:", error.response?.data || error.message);
-        throw error;
-    }
+ console.log("Đang ghim messageId:", messageId);
+ if (!messageId) {
+ throw new Error("messageId không được để trống");
+ }
+try {
+const response = await axios.post('/chat/pin', { messageId });
+ console.log("Kết quả ghim:", response.data);
+ // Làm mới danh sách tin nhắn ghim ngay sau khi ghim thành công
+ const { selectedChat } = get();
+if (selectedChat && selectedChat.chatId) {
+ await get().fetchPinnedMessages(selectedChat.chatId);
+ }
+ return response.data;
+ } catch (error) {
+ console.error("Lỗi khi ghim tin nhắn:", error.response?.data || error.message);
+ throw error;
+ }
 },
 
 // Thêm hàm unpinMessage
 unpinMessage: async (messageId) => {
-    console.log("Đang bỏ ghim messageId:", messageId);
-    if (!messageId) {
-        throw new Error("messageId không được để trống");
-    }
-    try {
-        const response = await axios.post('/chat/unpin', { messageId });
-        console.log("Kết quả bỏ ghim:", response.data);
-        // Làm mới danh sách tin nhắn ghim ngay sau khi bỏ ghim thành công
-        const { selectedChat } = get();
-        if (selectedChat && selectedChat.chatId) {
-            await get().fetchPinnedMessages(selectedChat.chatId);
-        }
-        return response.data;
-    } catch (error) {
-        console.error("Lỗi khi bỏ ghim tin nhắn:", error.response?.data || error.message);
-        throw error;
-    }
+ console.log("Đang bỏ ghim messageId:", messageId);
+ if (!messageId) {
+ throw new Error("messageId không được để trống");
+ }
+ try {
+ const response = await axios.post('/chat/unpin', { messageId });
+ console.log("Kết quả bỏ ghim:", response.data);
+ // Làm mới danh sách tin nhắn ghim ngay sau khi bỏ ghim thành công
+ const { selectedChat } = get();
+ if (selectedChat && selectedChat.chatId) {
+ await get().fetchPinnedMessages(selectedChat.chatId);
+ }
+ return response.data;
+} catch (error) {
+ console.error("Lỗi khi bỏ ghim tin nhắn:", error.response?.data || error.message);
+ throw error;
+ }
 },
 
 
 updateMessagePinStatus: (messageId, isPinned, pinnedBy) => {
-  const { messages } = get();
-  
-  const updatedMessages = messages.map(msg => {
-    if (msg.messageId === messageId) {
-      return {
-        ...msg,
-        isPinned: isPinned,
-        pinnedBy: pinnedBy,
-        pinnedAt: isPinned ? new Date() : null
-      };
-    }
-    return msg;
-  });
-  
-  set({ messages: updatedMessages });
+  const { messages } = get();
+  
+  const updatedMessages = messages.map(msg => {
+    if (msg.messageId === messageId) {
+      return {
+        ...msg,
+        isPinned: isPinned,
+        pinnedBy: pinnedBy,
+        pinnedAt: isPinned ? new Date() : null
+      };
+    }
+    return msg;
+  });
+  
+  set({ messages: updatedMessages });
 },
 
 updatePinnedMessages: (messageId, action, pinnedMessage = null) => {
-  const { pinnedMessages } = get();
-  
-  if (action === 'pin' && pinnedMessage) {
-    // Thêm tin nhắn vào danh sách ghim nếu chưa có
-    const exists = pinnedMessages.find(msg => msg.messageId === messageId);
-    if (!exists) {
-      set({ pinnedMessages: [...pinnedMessages, pinnedMessage] });
-    }
-  } else if (action === 'unpin') {
-    // Xóa tin nhắn khỏi danh sách ghim
-    const updatedPinnedMessages = pinnedMessages.filter(msg => msg.messageId !== messageId);
-    set({ pinnedMessages: updatedPinnedMessages });
-  }
+  const { pinnedMessages } = get();
+  
+  if (action === 'pin' && pinnedMessage) {
+    // Thêm tin nhắn vào danh sách ghim nếu chưa có
+    const exists = pinnedMessages.find(msg => msg.messageId === messageId);
+    if (!exists) {
+      set({ pinnedMessages: [...pinnedMessages, pinnedMessage] });
+    }
+  } else if (action === 'unpin') {
+    // Xóa tin nhắn khỏi danh sách ghim
+    const updatedPinnedMessages = pinnedMessages.filter(msg => msg.messageId !== messageId);
+    set({ pinnedMessages: updatedPinnedMessages });
+  }
 },
-  fetchPinnedMessages: async (chatId) => {
-  try {
-    console.log("Đang fetch pinnedMessages cho chatId:", chatId);
-    const res = await axios.get(`/chat/${chatId}/pinned`);
-    console.log("Kết quả fetch pinnedMessages:", res.data);
-    set({ pinnedMessages: res.data.pinnedMessages });
-  } catch (error) {
-    console.error("Lỗi khi fetch pinnedMessages:", error);
-    set({ pinnedMessages: [] });
-  }
+  fetchPinnedMessages: async (chatId) => {
+  try {
+    console.log("Đang fetch pinnedMessages cho chatId:", chatId);
+    const res = await axios.get(`/chat/${chatId}/pinned`);
+    console.log("Kết quả fetch pinnedMessages:", res.data);
+    set({ pinnedMessages: res.data.pinnedMessages });
+  } catch (error) {
+    console.error("Lỗi khi fetch pinnedMessages:", error);
+    set({ pinnedMessages: [] });
+  }
 },
 }));

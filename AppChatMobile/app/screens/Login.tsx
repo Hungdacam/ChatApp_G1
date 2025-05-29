@@ -7,6 +7,11 @@ import * as Facebook from 'expo-facebook';
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from "expo-web-browser";
 import * as Google from "expo-auth-session/providers/google";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { reconnectSocket } from "../config/socket";
+
+// Sau khi đăng nhập thành công và lưu token:
+
 export function Login() {
   const navigation = useNavigation();
   const androidClientId = '151045395656-fnhdl7jdhhps8feuuvs8mp6gjtn61s24.apps.googleusercontent.com';
@@ -81,6 +86,8 @@ export function Login() {
         const credential = FacebookAuthProvider.credential(token);
         const userCredential = await signInWithCredential(auth, credential);
         console.log("User logged in Firebase:", userCredential.user);
+        // Gọi hàm handleLoginSuccess sau khi đăng nhập thành công
+        handleLoginSuccess(userCredential.user.accessToken);
       } else {
         console.log("Facebook login cancelled");
       }
@@ -92,6 +99,18 @@ export function Login() {
   const handleLoginByAccout = async () => {
     navigation.navigate('LoginScreen');
   }
+
+  // Sau khi đăng nhập thành công và nhận được token
+  const handleLoginSuccess = async (tokenFromAPI) => {
+    await AsyncStorage.setItem("token", JSON.stringify({ token: tokenFromAPI }));
+    await reconnectSocket();
+    // Chuyển sang màn hình Home hoặc màn hình chính
+    navigation.reset({
+      index: 0,
+      routes: [{ name: "Home" }],
+    });
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <Image source={require('../images/logo.png')} style={styles.imageContainer}/>

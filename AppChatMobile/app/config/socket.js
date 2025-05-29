@@ -40,6 +40,24 @@ const initializeSocket = async () => {
   }
 };
 
+
+const reconnectSocket = async () => {
+  try {
+    const token = await AsyncStorage.getItem("token");
+    if (!token) {
+      console.log("❌ Không tìm thấy token, không thể reconnect socket");
+      return;
+    }
+    const parsedToken = JSON.parse(token);
+    socket.auth = { token: parsedToken.token };
+    socket.connect();
+  } catch (error) {
+    console.error("Lỗi reconnect socket:", error);
+  }
+};
+
+export { reconnectSocket };
+
 // Gọi hàm khởi tạo khi ứng dụng khởi động
 initializeSocket();
 

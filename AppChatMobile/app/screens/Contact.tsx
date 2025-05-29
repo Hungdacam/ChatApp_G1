@@ -22,6 +22,8 @@ import * as Contacts from "expo-contacts";
 import * as DocumentPicker from "expo-document-picker";
 import styles from "../style/ContactStyle";
 import socket from "../config/socket";
+import { Ionicons } from "@expo/vector-icons";
+
 export default function Contact() {
   const [requests, setRequests] = useState([]);
   const [friends, setFriends] = useState([]);
@@ -135,7 +137,7 @@ export default function Contact() {
         });
 
         setContacts(registeredContacts);
-        Alert.alert("Thành công", `Đã tìm thấy ${registeredContacts.length} số điện thoại đã đăng ký.`);
+       
       }
     } catch (error) {
       console.error("Lỗi đồng bộ danh bạ:", error);
@@ -226,50 +228,50 @@ export default function Contact() {
     }, [selectedTab])
   );
 
-useEffect(() => {
-  const handler = () => {
-    if (selectedTab === "requests") {
-      Alert.alert("Thông báo", "Một lời mời kết bạn đã bị huỷ.");
-      fetchFriendRequests();
-    }
-  };
-  socket.on("friend-request-canceled", handler);
-  return () => {
-    socket.off("friend-request-canceled", handler);
-  };
-}, [selectedTab]);
+  useEffect(() => {
+    const handler = () => {
+      if (selectedTab === "requests") {
+        Alert.alert("Thông báo", "Một lời mời kết bạn đã bị huỷ.");
+        fetchFriendRequests();
+      }
+    };
+    socket.on("friend-request-canceled", handler);
+    return () => {
+      socket.off("friend-request-canceled", handler);
+    };
+  }, [selectedTab]);
 
-useEffect(() => {
-  const handler = () => {
-    if (selectedTab === "requests") {
-      fetchFriendRequests();
-    }
-  };
-  socket.on("new_friend_request", handler);
-  return () => {
-    socket.off("new_friend_request", handler);
-  };
-}, [selectedTab]);
+  useEffect(() => {
+    const handler = () => {
+      if (selectedTab === "requests") {
+        fetchFriendRequests();
+      }
+    };
+    socket.on("new_friend_request", handler);
+    return () => {
+      socket.off("new_friend_request", handler);
+    };
+  }, [selectedTab]);
 
-useEffect(() => {
-  const handler = (data) => {
-    // Cập nhật lại trạng thái bạn bè trong danh bạ
-    setContacts((prev) =>
-      prev.map((contact) =>
-        contact._id === data.receiver._id
-          ? { ...contact, friendStatus: "friends", isSender: false }
-          : contact
-      )
-    );
-    fetchFriends(); // cập nhật lại danh sách bạn bè
-    if (selectedTab === "requests") fetchFriendRequests();
-    //Alert.alert("Thông báo", "Lời mời kết bạn đã được chấp nhận.");
-  };
-  socket.on("friend_request_accepted", handler);
-  return () => {
-    socket.off("friend_request_accepted", handler);
-  };
-}, [selectedTab]);
+  useEffect(() => {
+    const handler = (data) => {
+      // Cập nhật lại trạng thái bạn bè trong danh bạ
+      setContacts((prev) =>
+        prev.map((contact) =>
+          contact._id === data.receiver._id
+            ? { ...contact, friendStatus: "friends", isSender: false }
+            : contact
+        )
+      );
+      fetchFriends(); // cập nhật lại danh sách bạn bè
+      if (selectedTab === "requests") fetchFriendRequests();
+      //Alert.alert("Thông báo", "Lời mời kết bạn đã được chấp nhận.");
+    };
+    socket.on("friend_request_accepted", handler);
+    return () => {
+      socket.off("friend_request_accepted", handler);
+    };
+  }, [selectedTab]);
 
   const fetchFriendRequests = async () => {
     try {
@@ -557,7 +559,7 @@ useEffect(() => {
         />
         <View style={styles.infoContainer}>
           <Text style={styles.senderName}>{item.name}</Text>
-          <Text>{formatPhone(item.phone)}</Text>
+          <Text style={styles.phoneText}>{formatPhone(item.phone)}</Text>
         </View>
       </View>
     </TouchableOpacity>
@@ -574,45 +576,49 @@ useEffect(() => {
           <Text style={styles.senderName}>{item.contactName}</Text>
           <Text>{formatPhone(item.phone)}</Text>
           <View style={{ flexDirection: "row", marginTop: 6 }}>
-            {/* Nút trạng thái bạn bè/kết bạn/huỷ lời mời */}
+            {/* Các nút trạng thái bạn bè/kết bạn/huỷ lời mời */}
             {item.friendStatus === "friends" ? (
               <>
                 <TouchableOpacity
-                  style={[styles.button, { backgroundColor: "#aaa", marginRight: 8 }]}
+                  style={[styles.friendStatusBtn, styles.btnFriend]}
                   disabled
                 >
-                  <Text style={styles.buttonText}>Bạn bè</Text>
+                  <Text style={styles.friendStatusText}>Bạn bè</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.button, { backgroundColor: "#DC3545", marginRight: 8 }]}
+                  style={[styles.friendStatusBtn, styles.btnUnfriend]}
                   onPress={() => unfriendUser(item._id)}
                 >
-                  <Text style={styles.buttonText}>Huỷ kết bạn</Text>
+                  <Text style={styles.friendStatusText}>Huỷ kết bạn</Text>
                 </TouchableOpacity>
               </>
             ) : item.friendStatus === "pending" && item.isSender ? (
               <TouchableOpacity
-                style={[styles.button, { backgroundColor: "#DC3545", marginRight: 8 }]}
+                style={[styles.friendStatusBtn, styles.btnUnfriend]}
                 onPress={() => cancelFriendRequest(item._id)}
               >
-                <Text style={styles.buttonText}>Huỷ lời mời</Text>
+                <Text style={styles.friendStatusText}>Huỷ lời mời</Text>
               </TouchableOpacity>
             ) : item.friendStatus === "pending" && !item.isSender ? (
-              <TouchableOpacity style={[styles.button, { backgroundColor: "#aaa", marginRight: 8 }]} disabled>
-                <Text style={styles.buttonText}>Đã được mời</Text>
+              <TouchableOpacity
+                style={[styles.friendStatusBtn, styles.btnDisabled]}
+                disabled
+              >
+                <Text style={[styles.friendStatusText, { color: "#888" }]}>Đã được mời</Text>
               </TouchableOpacity>
             ) : (
               <TouchableOpacity
-                style={[styles.button, { backgroundColor: "#007BFF", marginRight: 8 }]}
+                style={[styles.friendStatusBtn, styles.btnRequest]}
                 onPress={() => sendFriendRequest(item._id)}
               >
-                <Text style={styles.buttonText}>Kết bạn</Text>
+                <Text style={styles.friendStatusText}>Kết bạn</Text>
               </TouchableOpacity>
             )}
-
-            {/* Nút xem trang cá nhân */}
+          </View>
+          {/* Nút trang cá nhân xuống hàng dưới, căn trái */}
+          <View style={{ marginTop: 8, alignItems: "flex-start" }}>
             <TouchableOpacity
-              style={[styles.button, { backgroundColor: "#1976d2" }]}
+              style={[styles.friendStatusBtn, styles.btnViewProfile]}
               onPress={() =>
                 navigation.navigate("UserProfile", {
                   user: {
@@ -624,7 +630,7 @@ useEffect(() => {
                 })
               }
             >
-              <Text style={styles.buttonText}>Xem trang cá nhân</Text>
+              <Text style={styles.friendStatusText}>Xem trang cá nhân</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -652,7 +658,8 @@ useEffect(() => {
             ]}
             onPress={() => setSelectedTab("requests")}
           >
-            <Text style={styles.tabText}>
+            <Ionicons name="mail-unread-outline" size={20} color={selectedTab === "requests" ? "#fff" : "#1976d2"} />
+            <Text style={[styles.tabText, selectedTab === "requests" && styles.activeTabText]}>
               Lời mời {requests.length > 0 ? `(${requests.length})` : ""}
             </Text>
           </TouchableOpacity>
@@ -663,7 +670,8 @@ useEffect(() => {
             ]}
             onPress={() => setSelectedTab("friends")}
           >
-            <Text style={styles.tabText}>
+            <Ionicons name="people-outline" size={20} color={selectedTab === "friends" ? "#fff" : "#1976d2"} />
+            <Text style={[styles.tabText, selectedTab === "friends" && styles.activeTabText]}>
               Bạn bè {friends.length > 0 ? `(${friends.length})` : ""}
             </Text>
           </TouchableOpacity>
@@ -674,7 +682,8 @@ useEffect(() => {
             ]}
             onPress={() => setSelectedTab("contacts")}
           >
-            <Text style={styles.tabText}>
+            <Ionicons name="call-outline" size={20} color={selectedTab === "contacts" ? "#fff" : "#1976d2"} />
+            <Text style={[styles.tabText, selectedTab === "contacts" && styles.activeTabText]}>
               Danh bạ {contacts.length > 0 ? `(${contacts.length})` : ""}
             </Text>
           </TouchableOpacity>

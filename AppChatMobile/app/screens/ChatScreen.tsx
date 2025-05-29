@@ -65,7 +65,7 @@ interface CallData {
 }
 
 export default function ChatScreen({ route }) {
-  const { chatId, receiverId, name, currentUserId, avatar: initialAvatar, isGroupChat } = route.params;
+  const { chatId, receiverId, name, currentUserId, avatar: initialAvatar, isGroupChat, onlineUsers = [] } = route.params;
   const [messages, setMessages]= useState<Message[]>([]);
   const [content, setContent] = useState("");
   const [selectedFiles, setSelectedFiles] = useState<Array<{ name: string; uri: string; mimeType: string }>>([]);
@@ -85,7 +85,8 @@ export default function ChatScreen({ route }) {
   const [replyTo, setReplyTo] = useState<{ messageId: string; senderName: string; content: string } | null>(null);
 const [pinnedModalVisible, setPinnedModalVisible] = useState(false);
 const [pinNotification, setPinNotification] = useState<{ senderName: string; content: string; messageId: string } | null>(null);
-  const imageMessages = messages
+const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);  
+const imageMessages = messages
     .filter((msg) => typeof msg.image === "string" && !!msg.image)
     .map((msg) => ({ url: msg.image as string }));
  const pinnedMessages = messages.filter(msg => msg.isPinned);
@@ -195,20 +196,33 @@ const [pinNotification, setPinNotification] = useState<{ senderName: string; con
         navigation.navigate("HomeTabs", { screen: "Inbox" });
       }
     });
-socket.on("message_pinned", ({ messageId, senderName, content, fileName }) => {
-  // Nếu là file, ưu tiên hiển thị tên file đẹp
+socket.on("message_pinned", ({ messageId, senderName, content, fileName, pinnedBy }) => {
+  // Ưu tiên lấy tên người ghim từ pinnedBy (nếu có), fallback về senderName
   let displayContent = content;
   if (fileName) {
     displayContent = decodeURIComponent(fileName);
   }
-  setPinNotification({ senderName, content: displayContent, messageId });
+  const name = pinnedBy?.name || senderName || "Ai đó";
+  setPinNotification({ senderName: name, content: displayContent, messageId });
   fetchMessages();
   setTimeout(() => setPinNotification(null), 5000);
 });
 
-socket.on("message_unpinned", ({ messageId }) => {
-    fetchMessages();
+socket.on("message_unpinned", ({ messageId, unpinnedBy }) => {
+  // Tìm nội dung tin nhắn vừa gỡ ghim để hiển thị
+  const msg = messages.find(m => m.messageId === messageId);
+  let displayContent = msg?.content || "";
+  if (msg?.fileName) displayContent = decodeURIComponent(msg.fileName);
+
+  setPinNotification({
+    senderName: unpinnedBy?.name || "Ai đó",
+    content: displayContent,
+    messageId,
+    isUnpin: true, // Đánh dấu là gỡ ghim
   });
+  fetchMessages();
+  setTimeout(() => setPinNotification(null), 5000);
+});
     markMessageAsRead();
 
     return () => {
@@ -390,6 +404,7 @@ socket.on("message_unpinned", ({ messageId }) => {
         const formData = new FormData();
         formData.append("chatId", chatId);
         if (receiverId) formData.append("receiverId", receiverId);
+        if (replyTo) formData.append("replyToMessageId", replyTo.messageId); // <-- Thêm dòng này
 
         const isAllVideo = selectedFiles.every(f => f.mimeType?.startsWith("video/"));
         const isAllImage = selectedFiles.every(f => f.mimeType?.startsWith("image/"));
@@ -678,7 +693,9 @@ const unpinMessage = async (messageId: string) => {
 const scrollToMessage = (messageId: string) => {
   const index = messages.findIndex(m => m.messageId === messageId);
   if (index !== -1) {
-    flatListRef.current?.scrollToIndex({ index, animated: true });
+    setTimeout(() => {
+      flatListRef.current?.scrollToIndex({ index, animated: true });
+    }, 300); // delay nhỏ để FlatList kịp render
   }
 };
   const renderMessage = ({ item }: { item: Message }) => {
@@ -804,6 +821,15 @@ if (repliedMessage) {
   style={[
     styles.messageContainer,
     { alignSelf: isCurrentUser ? "flex-end" : "flex-start" },
+    item.messageId === highlightedMessageId && {
+      backgroundColor: "#fffbe7",
+      borderWidth: 2,
+      borderColor: "#ffd600",
+      shadowColor: "#ffd600",
+      shadowOpacity: 0.5,
+      shadowRadius: 8,
+      elevation: 4,
+    },
   ]}
 >
   <View style={[
@@ -818,13 +844,19 @@ if (repliedMessage) {
     )}
     <View>
       {/* Reply box */}
-      {!isRecalled && isReply && repliedMessage && (
+      {!isRecalled && isReply && (
         <View style={[
           styles.replyBox,
-          isCurrentUser && { alignSelf: "flex-end" } // Nếu là tin nhắn của mình thì sát phải
+          isCurrentUser && { alignSelf: "flex-end" }
         ]}>
-          <Text style={styles.replySenderName}>@{repliedMessage.senderId.name || "Không rõ"}</Text>
-          <Text style={styles.replyText}>{repliedMessage.content}</Text>
+          <Text style={styles.replySenderName}>
+            @{repliedMessage ? repliedMessage.senderId.name : "Không rõ"}
+          </Text>
+          <Text style={styles.replyText}>
+            {repliedMessage
+              ? repliedMessage.content
+              : "Tin nhắn gốc không tìm thấy"}
+          </Text>
         </View>
       )}
       {/* Nội dung tin nhắn */}
@@ -902,14 +934,26 @@ if (repliedMessage) {
             </View>
           </TouchableOpacity>
         ) : (
-          <Text
+          <ParsedText
             style={[
               styles.messageText,
               { color: isCurrentUser ? "#fff" : "#222" }
             ]}
+            parse={[
+              {
+                type: 'url',
+                style: {
+                  color: isCurrentUser ? "#fff" : "#1976d2", 
+                  textDecorationLine: 'underline',
+                  fontWeight: "bold",
+                },
+                onPress: (url) => Linking.openURL(url),
+              },
+            ]}
+            childrenProps={{ allowFontScaling: false }}
           >
             {item.content}
-          </Text>
+          </ParsedText>
         )}
         {/* Footer: giờ gửi */}
         <View style={styles.messageFooter}>
@@ -947,24 +991,46 @@ if (repliedMessage) {
           <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginRight: 10 }}>
     <Ionicons name="arrow-back" size={28} color="#007AFF" />
   </TouchableOpacity>
+  <View style={{ position: "relative" }}>
   <Image
     source={{ uri: avatar }}
     style={styles.headerAvatar}
   />
-  <TouchableOpacity
-    onPress={() =>
-      navigation.navigate("ChatInfoScreen", {
-        chatId,
-        name,
-        avatar,
-        isGroupChat,
-        currentUserId,
-        receiverId,
-      })
-    }
-  >
-    <Text style={styles.headerText}>{name}</Text>
-  </TouchableOpacity>
+  {!isGroupChat && onlineUsers.includes(receiverId) && (
+    <View
+      style={{
+        position: "absolute",
+        bottom: 2,
+        right: 2,
+        width: 14,
+        height: 14,
+        borderRadius: 7,
+        backgroundColor: "#22c55e",
+        borderWidth: 2,
+        borderColor: "#fff",
+      }}
+    />
+  )}
+</View>
+          <TouchableOpacity
+            onPress={() =>
+              navigation.navigate("ChatInfoScreen", {
+                chatId,
+                name,
+                avatar,
+                isGroupChat,
+                currentUserId,
+                receiverId,
+              })
+            }
+          >
+            <Text style={styles.headerText}>{name}</Text>
+            {!isGroupChat && (
+              <Text style={{ fontSize: 12, color: onlineUsers.includes(receiverId) ? "#22c55e" : "#888" }}>
+                {onlineUsers.includes(receiverId) ? "Đang hoạt động" : "Không hoạt động"}
+              </Text>
+            )}
+          </TouchableOpacity>
           {isGroupChat ? (
             <TouchableOpacity
               onPress={() => createCall(true)}
@@ -1039,7 +1105,10 @@ if (repliedMessage) {
   <View style={styles.pinNotification}>
     <Text>
       <Text style={{ color: "#ff9800" }}>📌 </Text>
-      Bạn đã ghim tin nhắn <Text style={{ fontWeight: "bold" }}>{pinNotification.content}</Text>.{" "}
+      {pinNotification.isUnpin
+        ? `${pinNotification.senderName} đã gỡ ghim tin nhắn `
+        : `${pinNotification.senderName} đã ghim tin nhắn `}
+      <Text style={{ fontWeight: "bold" }}>{pinNotification.content}</Text>.{" "}
       <Text
         style={{ color: "#1976d2" }}
         onPress={() => {
@@ -1059,6 +1128,11 @@ if (repliedMessage) {
           renderItem={renderMessage}
           style={styles.messageList}
           extraData={messages}
+          getItemLayout={(_, index) => ({
+    length: 80, // chiều cao ước lượng của 1 message item (đổi nếu item cao hơn/thấp hơn)
+    offset: 80 * index,
+    index,
+  })}
           onContentSizeChange={() => {
             flatListRef.current?.scrollToEnd({ animated: true });
           }}
@@ -1184,7 +1258,11 @@ if (repliedMessage) {
         <TouchableOpacity
           onPress={() => {
             setPinnedModalVisible(false);
-            scrollToMessage(item.messageId);
+            setTimeout(() => {
+              scrollToMessage(item.messageId);
+              setHighlightedMessageId(item.messageId);
+              setTimeout(() => setHighlightedMessageId(null), 5000);
+            }, 350); // delay để modal đóng xong, FlatList render lại
           }}
           style={styles.pinnedItemLarge}
         >
@@ -1233,7 +1311,7 @@ if (repliedMessage) {
         <Text style={styles.pinnedContent}>{item.content}</Text>
       )}
       <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
-        {/* Ẩn nút Copy nếu là file, ảnh, video */}
+        {/* Ẩn nút Copy nếu là tin nhắn đã được thu hồi */}
         {!(item.image || item.video || item.fileUrl) && (
           <TouchableOpacity
             onPress={() => Clipboard.setStringAsync(item.content)}

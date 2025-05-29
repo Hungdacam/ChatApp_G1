@@ -10,6 +10,7 @@ import {
   SafeAreaView,
   Alert,
   StyleSheet,
+  Dimensions,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
@@ -21,7 +22,10 @@ import { Video, ResizeMode } from "expo-av";
 import { Linking } from "react-native";
 import Modal from "react-native-modal";
 import ImageViewer from "react-native-image-zoom-viewer";
-import styles from "../style/ChatInfoStyle"; 
+import styles from "../style/ChatInfoStyle";
+
+const { width } = Dimensions.get("window");
+const IMAGE_SIZE = (width - 15 * 2 - 16) / 3; // paddingHorizontal*2 + margin*4
 
 interface MediaItem {
   type: string;
@@ -191,7 +195,13 @@ export default function ChatInfoScreen({ route }: ChatInfoScreenProps) {
   };
 
   const renderMediaItem = ({ item, index }: { item: MediaItem; index: number }) => (
-    <View style={styles.mediaItem}>
+    <View
+      style={[
+        styles.mediaItem,
+        activeTab === "Images" && { width: IMAGE_SIZE }, // chỉ ảnh mới set width nhỏ
+        (activeTab === "Files" || activeTab === "Links") && { width: "100%", alignItems: "flex-start" },
+      ]}
+    >
       {item.type === "image" && activeTab === "Images" ? (
         <TouchableOpacity
           onPress={() => {
@@ -291,20 +301,10 @@ export default function ChatInfoScreen({ route }: ChatInfoScreenProps) {
             <Text style={styles.buttonText}>Thêm thành viên</Text>
           </TouchableOpacity>
         )}
-        <TouchableOpacity style={styles.actionButton} onPress={() => Alert.alert("Chưa hỗ trợ", "Tính năng này sẽ được triển khai sau.")}>
-          <Ionicons name="pin-outline" size={24} color="#007AFF" />
-          <Text style={styles.buttonText}>Tin nhắn đã ghim</Text>
-        </TouchableOpacity>
+        
       </View>
 
-      <View style={styles.searchSection}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Tìm kiếm tin nhắn..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-      </View>
+ 
 
       <View style={styles.tabContainer}>
         {renderTabButton("Images", "Ảnh", "image-outline")}
@@ -322,7 +322,8 @@ export default function ChatInfoScreen({ route }: ChatInfoScreenProps) {
           })}
           renderItem={renderMediaItem}
           keyExtractor={(item, index) => `${item.url}-${index}`}
-          numColumns={3}
+          numColumns={activeTab === "Images" ? 3 : 1}
+          key={activeTab}
           ListEmptyComponent={<Text style={styles.emptyText}>Chưa có {activeTab.toLowerCase()} nào.</Text>}
         />
       </View>

@@ -16,6 +16,19 @@ const messageSchema = new mongoose.Schema({
   replyToMessageId: { type: String, default: null },
 isPinned: { type: Boolean, default: false },
   pinnedAt: { type: Date },
-  pinnedBy: { type: mongoose.Schema.Types.ObjectId, ref: "user" }
+  pinnedBy: { type: mongoose.Schema.Types.ObjectId, ref: "user" },
+     isForwarded: {
+      type: Boolean,
+      default: false
+    },
+    originalMessage: {
+      type: Object,
+      default: null
+    },
+    forwardedFrom: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'user'
+    }
+
 });
 module.exports = mongoose.model('Message', messageSchema);

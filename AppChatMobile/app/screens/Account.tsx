@@ -15,6 +15,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import * as ImagePicker from "expo-image-picker";
 import { SafeAreaView } from "react-native-safe-area-context";
+import socket from "../config/socket";
 const CLOUDINARY_UPLOAD_PRESET = "ml_default";
 const CLOUDINARY_CLOUD_NAME = "dbjqhaayj";
 const CLOUDINARY_API =
@@ -106,6 +107,7 @@ const AccountScreen = () => {
   const handleLogout = async () => {
     try {
       await AsyncStorage.removeItem("token");
+      socket.disconnect(); // <-- Ngắt kết nối socket
       navigation.reset({
         index: 0,
         routes: [{ name: "LoginScreen" }],
@@ -147,24 +149,22 @@ const AccountScreen = () => {
           </View>
           
           <View style={styles.infoContainer}>
-          <Text style={styles.info}>
-              <Text style={{ color: "black", fontSize: 17, fontWeight: "bold" }}>SĐT: </Text>
-              <Text style={{ color: "black", fontSize: 16 }}>{formatPhone(userInfo.phone)}</Text>
-            </Text>
-            <Text style={styles.info}>
-              <Text style={{ color: "black", fontSize: 17, fontWeight: "bold"}}>Email: </Text>
-              <Text style={{ color: "black", fontSize: 16 }}>{userInfo.email}</Text>
-            </Text>
-
-            <Text style={styles.info}>
-              <Text style={{ color: "black", fontSize: 17, fontWeight: "bold" }}>Ngày sinh: </Text>
-              <Text style={{ color: "black", fontSize: 16 }}>{formatDate(userInfo.dob)}</Text>
-            </Text>
-
-            <Text style={styles.info}>
-              <Text style={{ color: "black", fontSize: 17, fontWeight: "bold" }}>Giới tính: </Text>
-              <Text style={{ color: "black", fontSize: 16 }}>{userInfo.gender}</Text>
-            </Text>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>SĐT:</Text>
+              <Text style={styles.infoValue}>{formatPhone(userInfo.phone)}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Email:</Text>
+              <Text style={styles.infoValue}>{userInfo.email}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Ngày sinh:</Text>
+              <Text style={styles.infoValue}>{formatDate(userInfo.dob)}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Giới tính:</Text>
+              <Text style={styles.infoValue}>{userInfo.gender}</Text>
+            </View>
           </View>
         </View>
 
@@ -190,49 +190,69 @@ const AccountScreen = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#fff", // giữ màu nền khi dùng SafeAreaView
+    backgroundColor: "#f6f8fa",
   },
   container: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: "#f6f8fa",
   },
   profileSection: {
-    padding: 30,
+    paddingVertical: 32,
+    paddingHorizontal: 20,
     alignItems: "center",
     backgroundColor: "#fff",
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
-    shadowColor: "#fff",
-    shadowOpacity: 0.1,
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
     shadowRadius: 10,
-    elevation: 10,
+    elevation: 6,
+    marginBottom: 18,
   },
   avatar: {
-    width: 150,
-    height: 150,
-    borderRadius: 100,
-    borderColor: "#FFA500",
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    borderColor: "#1976d2",
     borderWidth: 3,
-   
-  },
-  infoContainer: {
-    flex: 1,
-    marginTop: 30,
-    paddingHorizontal: 15,
-    alignItems: "flex-start",
+    backgroundColor: "#e3eaf2",
   },
   name: {
     fontSize: 24,
     fontWeight: "bold",
-    color: "black",
-    marginBottom: 5,
-    alignItems: "center",
+    color: "#222",
+    marginTop: 22,
+    marginBottom: 8,
+    textAlign: "center",
   },
-  info: {
+  infoContainer: {
+    width: "100%",
+    marginTop: 18,
+    backgroundColor: "#f3f6fb",
+    borderRadius: 16,
+    padding: 18,
+    alignItems: "flex-start",
+    shadowColor: "#000",
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  infoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  infoLabel: {
+    color: "#1976d2",
+    fontWeight: "bold",
     fontSize: 16,
-    color: "#ccc",
-    marginBottom: 10,
-    marginLeft: -50,
+    minWidth: 90,
+  },
+  infoValue: {
+    color: "#222",
+    fontSize: 16,
+    fontWeight: "500",
+    marginLeft: 4,
   },
   buttonSection: {
     padding: 20,
@@ -241,21 +261,21 @@ const styles = StyleSheet.create({
   button: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#eeeeee",
+    backgroundColor: "#fff",
     paddingVertical: 15,
     paddingHorizontal: 20,
     borderRadius: 12,
-    shadowColor: "#gray",
-    shadowOpacity: 0.2,
+    shadowColor: "#1976d2",
+    shadowOpacity: 0.06,
     shadowRadius: 6,
-    elevation: 4,
+    elevation: 2,
     borderWidth: 1,
-    borderColor: "gray",
+    borderColor: "#e3eaf2",
   },
   buttonText: {
-    color: "#black",
+    color: "#1976d2",
     marginLeft: 15,
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: "600",
   },
 });

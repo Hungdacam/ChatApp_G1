@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Alert,
   Image,
+  SafeAreaView,
 } from "react-native";
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -222,59 +223,57 @@ useEffect(() => {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <Text style={styles.title}>Trang cá nhân</Text>
       <Image
         source={{ uri: user.avatar || 'https://via.placeholder.com/120' }}
         style={styles.avatar}
       />
-      <Text style={styles.info}>Tên: {user.name}</Text>
-      <Text style={styles.info}>SĐT: {formatPhone(user.phone)}</Text>
-      <Text style={styles.info}>Ngày sinh: {formatDate(user.dob)}</Text>
-{!isSelf && (
-  isFriend ? (
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-      <TouchableOpacity
-        style={[
-          styles.button,
-          {
-            backgroundColor: '#6C757D',
-            flex: 1,
-            marginRight: 10,
-          },
-        ]}
-        disabled
-      >
-        <Text style={styles.buttonText}>Đã là bạn bè</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={[
-          styles.button,
-          {
-            backgroundColor: '#DC3545',
-            flex: 1,
-            marginLeft: 10,
-          },
-        ]}
-        onPress={unfriendUser}
-      >
-        <Text style={styles.buttonText}>Hủy kết bạn</Text>
-      </TouchableOpacity>
-    </View>
-  ) : (
-    <TouchableOpacity
-      style={[styles.button, { backgroundColor: isRequestSent ? '#DC3545' : '#28A745' }]}
-      onPress={isRequestSent ? cancelFriendRequest : sendFriendRequest}
-    >
-      <Text style={styles.buttonText}>
-        {isRequestSent ? 'Hủy lời mời kết bạn' : 'Gửi lời mời kết bạn'}
-      </Text>
-    </TouchableOpacity>
-  )
-)}
-
-    </View>
+      <View style={styles.infoBox}>
+        <View style={styles.infoRow}>
+          <Text style={styles.infoLabel}>Tên:</Text>
+          <Text style={styles.infoValue}>{user.name}</Text>
+        </View>
+        <View style={styles.infoRow}>
+          <Text style={styles.infoLabel}>SĐT:</Text>
+          <Text style={styles.infoValue}>{user.phone}</Text>
+        </View>
+        <View style={styles.infoRow}>
+          <Text style={styles.infoLabel}>Ngày sinh:</Text>
+          <Text style={styles.infoValue}>{user.dob}</Text>
+        </View>
+      </View>
+      {!isSelf && (
+        isFriend ? (
+          <View style={styles.buttonRow}>
+            <TouchableOpacity
+              style={[styles.button, styles.buttonGray]}
+              disabled
+            >
+              <Text style={styles.buttonText}>Đã là bạn bè</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.button, styles.buttonRed]}
+              onPress={unfriendUser}
+            >
+              <Text style={styles.buttonText}>Hủy kết bạn</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={[
+              styles.button,
+              isRequestSent ? styles.buttonRed : styles.buttonGreen,
+            ]}
+            onPress={isRequestSent ? cancelFriendRequest : sendFriendRequest}
+          >
+            <Text style={styles.buttonText}>
+              {isRequestSent ? 'Hủy lời mời kết bạn' : 'Gửi lời mời kết bạn'}
+            </Text>
+          </TouchableOpacity>
+        )
+      )}
+    </SafeAreaView>
   );
 };
 

@@ -10,27 +10,85 @@ exports.sendMessage = async (req, res) => {
   console.log("Request files:", req.files);
   try {
     const senderId = req.user?._id;
-    const { chatId, content, receiverId, replyToMessageId } = req.body;
+    const { chatId, content, receiverId, replyToMessageId, isForwarded, originalMessage } = req.body; // THÊM isForwarded, originalMessage
     let imageUrls = [];
     let imageUrl = null;
     let videoUrl = null;
     let fileUrl = null;
     let fileName = null;
     let videoUrls = [];
-if (req.body.image) imageUrl = req.body.image;
-if (req.body.video) videoUrl = req.body.video;
-if (req.body.fileUrl) fileUrl = req.body.fileUrl;
-if (req.body.fileName) fileName = req.body.fileName;
+
+    if (req.body.image) imageUrl = req.body.image;
+    if (req.body.video) videoUrl = req.body.video;
+    if (req.body.fileUrl) fileUrl = req.body.fileUrl;
+    if (req.body.fileName) fileName = req.body.fileName;
+
     console.log("Request body:", req.body);
     console.log("Request files:", req.files);
 
     // Kiểm tra xác thực và dữ liệu đầu vào
     if (!senderId) return res.status(401).json({ message: "Vui lòng đăng nhập lại." });
     if (!chatId) return res.status(400).json({ message: "Thiếu chatId." });
+
+    // THÊM MỚI: Xử lý tin nhắn chuyển tiếp TRƯỚC khi xử lý file
+    if (isForwarded && originalMessage) {
+      console.log("Đang xử lý tin nhắn chuyển tiếp:", originalMessage);
+      
+      // Kiểm tra chat tồn tại
+      let chat = await Chat.findOne({ chatId });
+      if (!chat) return res.status(404).json({ message: "Chat không tồn tại." });
+
+      const forwardedContent = content || originalMessage.content || "";
+      
+      // Tạo tin nhắn chuyển tiếp với media gốc
+      const messageId = uuidv4();
+      const message = new Message({
+        messageId,
+        chatId,
+        senderId,
+        content: forwardedContent,
+        // QUAN TRỌNG: Giữ nguyên URL media gốc
+        image: originalMessage.image || null,
+        video: originalMessage.video || null,
+        fileUrl: originalMessage.fileUrl || null,
+        fileName: originalMessage.fileName || null,
+        fileSize: originalMessage.fileSize || null,
+        isForwarded: true,
+        originalMessage: originalMessage,
+        forwardedFrom: originalMessage.senderId,
+        isDelivered: false,
+        isRead: false,
+        createdAt: new Date(),
+        replyToMessageId
+      });
+
+      await message.save();
+
+      // Cập nhật thời gian chat
+      chat.updatedAt = new Date();
+      await chat.save();
+
+      // Phát sự kiện socket
+      const io = req.app.get("io");
+      const onlineUsers = req.app.get("onlineUsers");
+      const populatedMessage = await Message.findOne({ messageId })
+        .populate("senderId", "name avatar")
+        .populate("forwardedFrom", "name avatar");
+
+      emitNewMessage(chat, populatedMessage, io, onlineUsers);
+
+      return res.status(201).json({ 
+        message: "Đã chuyển tiếp tin nhắn", 
+        messageId,
+        isForwarded: true 
+      });
+    }
+
+    // Kiểm tra nội dung cho tin nhắn bình thường
     if (
       (!content || content.trim() === "") &&
       !req.files?.image &&
-      !req.files?.images && // Thêm dòng này
+      !req.files?.images &&
       !req.files?.video &&
       !req.files?.file
     ) {
@@ -122,6 +180,7 @@ if (req.body.fileName) fileName = req.body.fileName;
       }
     }
 
+
     // Xác định nội dung tin nhắn
     const contentToSave = content && content.trim() !== ""
       ? content
@@ -131,7 +190,6 @@ if (req.body.fileName) fileName = req.body.fileName;
         : "");
 
     if (imageUrls.length > 0) {
-      // LẤY io và onlineUsers TRƯỚC khi emit
       const io = req.app.get("io");
       const onlineUsers = req.app.get("onlineUsers");
       for (const url of imageUrls) {
@@ -148,14 +206,12 @@ if (req.body.fileName) fileName = req.body.fileName;
           replyToMessageId
         });
         await message.save();
-        // emit socket nếu cần
         const populatedMessage = await Message.findOne({ messageId }).populate("senderId", "name avatar");
         emitNewMessage(chat, populatedMessage, io, onlineUsers);
       }
       return res.status(201).json({ message: "Đã gửi nhiều ảnh" });
     }
 
-    // Sau đó tạo message cho từng video
     if (videoUrls.length > 0) {
       const io = req.app.get("io");
       const onlineUsers = req.app.get("onlineUsers");
@@ -179,7 +235,7 @@ if (req.body.fileName) fileName = req.body.fileName;
       return res.status(201).json({ message: "Đã gửi nhiều video" });
     }
 
-    // Tạo và lưu tin nhắn
+    // Tạo và lưu tin nhắn bình thường
     const messageId = uuidv4();
     const message = new Message({
       messageId,
@@ -217,7 +273,6 @@ if (req.body.fileName) fileName = req.body.fileName;
     res.status(500).json({ message: "Lỗi server", error: error.message });
   }
 };
-
 exports.getMessages = async (req, res) => {
   const { chatId } = req.params;
   const limit = parseInt(req.query.limit) || 20;

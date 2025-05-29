@@ -1,3 +1,4 @@
+
 // ChatContainer.jsx
 import React, { useEffect, useRef, useState } from "react";
 import { useChatStore } from "../store/useChatStore";
@@ -11,29 +12,29 @@ import ForwardMessageModal from './ForwardMessageModal';
 
 const ChatContainer = () => {
   const { messages, getMessages, isMessagesLoading, selectedChat, pinnedMessages,fetchPinnedMessages } = useChatStore();
-  const messageEndRef = useRef(null);
-  const [currentUserId, setCurrentUserId] = useState(null);
+  const messageEndRef = useRef(null);
+  const [currentUserId, setCurrentUserId] = useState(null);
 
-  useEffect(() => {
-    if (selectedChat?.chatId) {
-        const socket = window.socketInstance;
-        if (socket) {
-            // Join phòng chat để nhận sự kiện
-            socket.emit("join_chat", selectedChat.chatId);
-            console.log("✅ Joined chat room:", selectedChat.chatId);
+  useEffect(() => {
+    if (selectedChat?.chatId) {
+        const socket = window.socketInstance;
+        if (socket) {
+            // Join phòng chat để nhận sự kiện
+            socket.emit("join_chat", selectedChat.chatId);
+            console.log("✅ Joined chat room:", selectedChat.chatId);
        }
-        
-        getMessages(selectedChat.chatId);
-        fetchPinnedMessages(selectedChat.chatId);
-        
-        // Cleanup: leave chat room khi chuyển chat
-        return () => {
-            if (socket) {
-                socket.emit("leave_chat", selectedChat.chatId);
-                console.log("Left chat room:", selectedChat.chatId);
-            }
-        };
-    }
+        
+        getMessages(selectedChat.chatId);
+        fetchPinnedMessages(selectedChat.chatId);
+        
+        // Cleanup: leave chat room khi chuyển chat
+        return () => {
+            if (socket) {
+                socket.emit("leave_chat", selectedChat.chatId);
+                console.log("Left chat room:", selectedChat.chatId);
+            }
+        };
+    }
 }, [selectedChat, getMessages, fetchPinnedMessages]);
 
   useEffect(() => {
@@ -64,35 +65,35 @@ const ChatContainer = () => {
     <div className="chat-container flex flex-col h-full">
              {selectedChat && <ChatHeader chat={selectedChat} />}
              {pinnedMessages && pinnedMessages.length > 0 && (
-        <div className="bg-yellow-50 border-b border-yellow-200 p-3">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="font-semibold text-yellow-700 text-sm">📌 Tin nhắn đã ghim</span>
-            <span className="text-xs text-gray-500">({pinnedMessages.length}/3)</span>
-          </div>
-          <div className="flex flex-col gap-2">
-            {pinnedMessages.map(msg => (
-              <div key={msg.messageId} className="bg-white rounded-lg p-2 shadow-sm">
-                <div className="flex items-start gap-2">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs font-medium text-gray-700">
-                        {msg.senderId?.name || "Người dùng"}
-                      </span>
-                      <span className="text-xs text-gray-400">•</span>
-                      <span className="text-xs text-gray-500">
-                        {msg.pinnedBy?.name ? `Ghim bởi ${msg.pinnedBy.name}` : "Đã ghim"}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-800 truncate">
-                      {msg.content || "[Media]"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+        <div className="bg-yellow-50 border-b border-yellow-200 p-3">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="font-semibold text-yellow-700 text-sm">📌 Tin nhắn đã ghim</span>
+            <span className="text-xs text-gray-500">({pinnedMessages.length}/3)</span>
+          </div>
+          <div className="flex flex-col gap-2">
+            {pinnedMessages.map(msg => (
+              <div key={msg.messageId} className="bg-white rounded-lg p-2 shadow-sm">
+                <div className="flex items-start gap-2">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs font-medium text-gray-700">
+                        {msg.senderId?.name || "Người dùng"}
+                      </span>
+                      <span className="text-xs text-gray-400">•</span>
+                      <span className="text-xs text-gray-500">
+                        {msg.pinnedBy?.name ? `Ghim bởi ${msg.pinnedBy.name}` : "Đã ghim"}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-800 truncate">
+                      {msg.content || "[Media]"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="messages-container flex-1 overflow-y-auto p-4">
         {isMessagesLoading ? (
           <div className="loading-messages">
@@ -131,7 +132,7 @@ const ChatContainer = () => {
                   key={message.messageId || message._id}
                   message={message}
                   currentUserId={currentUserId}
-                  isGroupChat={selectedChat.isGroupChat} 
+                  isGroupChat={selectedChat?.isGroupChat || false}
                 />
               ))}
             <div ref={messageEndRef} />

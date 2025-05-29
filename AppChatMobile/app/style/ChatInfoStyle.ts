@@ -1,5 +1,6 @@
-
-import { StyleSheet } from "react-native";
+import { StyleSheet, Dimensions } from "react-native";
+const { width } = Dimensions.get("window");
+const IMAGE_SIZE = (width - 15 * 2 - 16) / 3; // paddingHorizontal*2 + margin*4
 export default StyleSheet.create({
   container: {
     flex: 1,
@@ -91,14 +92,17 @@ export default StyleSheet.create({
     marginTop: 10,
   },
   mediaItem: {
-    width: 100,
-    height: 100,
-    margin: 5,
+    marginVertical: 4,
+    marginHorizontal: 4,
+    // width sẽ set động ở renderMediaItem
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "transparent",
   },
   mediaImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 5,
+    width: IMAGE_SIZE,
+    height: IMAGE_SIZE,
+    borderRadius: 8,
   },
   mediaVideo: {
     width: 100,
@@ -128,12 +132,19 @@ export default StyleSheet.create({
     height: 300,
   },
   filePreviewContainer: {
-    flexDirection: "column",
-    alignItems: "flex-start",
-    padding: 5,
-    borderRadius: 5,
-    width: 150,
-    justifyContent: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+    borderRadius: 16,
+    width: "90%",
+    backgroundColor: "#f5f7fa",
+    marginVertical: 12,
+    marginHorizontal: "5%",
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 3,
   },
   filePreviewIcon: {
     width: 40,
