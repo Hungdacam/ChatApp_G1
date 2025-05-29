@@ -175,20 +175,25 @@ socket.on("end_call", async (data) => {
     
     await call.save();
 
-    setTimeout(() => {
-                call.participants.forEach(participant => {
-                    const participantId = participant._id.toString();
-                    const targetSocketId = findUserSocket(participantId);
-                    if (targetSocketId) {
-                        io.to(targetSocketId).emit("call_ended", {
-                            callId,
-                            endedBy: socket.userId || 'unknown',
-                            message: 'Cuộc gọi đã kết thúc'
-                        });
-                    }
+    // ✅ Gửi cho TẤT CẢ participants bao gồm cả người kết thúc
+        console.log("📋 Participants trong call:", call.participants);
+        call.participants.forEach(participant => {
+            const participantId = participant._id ? participant._id.toString() : participant.toString();
+            const targetSocketId = findUserSocket(participantId);
+            
+            if (targetSocketId) {
+                console.log(`📤 Gửi thông báo call_ended đến user ${participantId}`);
+                io.to(targetSocketId).emit("call_ended", {
+                    callId,
+                    endedBy: socket.userId || 'unknown',
+                    message: 'Cuộc gọi đã kết thúc'
                 });
-            }, 100); // Delay 100ms
-        } catch (error) {
+            } else {
+                console.log(`❌ Không tìm thấy socket của user ${participantId}`);
+      }
+    });
+
+  } catch (error) {
     console.error("❌ Lỗi khi xử lý end_call:", error);
   }
 });

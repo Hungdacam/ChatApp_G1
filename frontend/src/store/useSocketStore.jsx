@@ -696,22 +696,18 @@ socket.on("call_ended", (data) => {
             incomingCall: null
         });
 
-        /// ✅ Chỉ gửi event navigation nếu đang ở CallPage
+        // ✅ Navigation cho CallPage
         if (window.location.pathname.includes('/call/')) {
             console.log("🔄 Đang ở CallPage, gửi event navigation");
-            
-            // ✅ Thêm timeout để đảm bảo state được reset
-            setTimeout(() => {
-                const event = new CustomEvent('callEndedFromSocket', { 
-                    detail: { 
-                        callId, 
-                        endedBy, 
-                        timestamp,
-                        reason: 'ended_by_peer' 
-                    } 
-                });
-                window.dispatchEvent(event);
-            }, 100);
+            const event = new CustomEvent('callEndedFromSocket', { 
+                detail: { 
+                    callId, 
+                    endedBy, 
+                    timestamp,
+                    reason: 'ended_by_peer' 
+                } 
+            });
+            window.dispatchEvent(event);
         }
     } else {
         console.log("⚠️ CallId không khớp:", {

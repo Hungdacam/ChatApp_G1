@@ -104,50 +104,32 @@ const CallPage = () => {
   };
 }, [authUser, callId]);
 // CallPage.jsx - Thêm event listener cho socket events
-// CallPage.jsx - Sửa lại event listener
 useEffect(() => {
-    const handleCallEndedFromSocket = (event) => {
-        console.log("📞 Nhận event từ socket:", event.detail);
-        
-        // ✅ Chỉ cleanup call state, KHÔNG gọi endCall()
+  const handleCallEndedFromSocket = (event) => {
+    console.log("📞 Nhận event từ socket:", event.detail);
+    // ✅ Cleanup call state trước khi navigate
         const callStore = useCallStore.getState();
         if (callStore.call) {
-            const callingState = callStore.call.state.callingState;
-            if (callingState !== 'left' && callingState !== 'idle') {
-                callStore.call.leave().catch((error) => {
-                    if (!error.message?.includes('already been left')) {
-                        console.error("Error leaving call:", error);
-                    }
-                });
-            }
+            callStore.endCall().catch(error => {
+                console.error('Error in cleanup endCall:', error);
+            });
         }
-        
-        // ✅ Reset state trực tiếp
-        callStore.setCallState({
-            call: null,
-            callId: null,
-            error: null,
-            incomingCall: null
-        });
-        
-        // ✅ Navigate ngay lập tức
-        console.log("🔄 Navigating to home...");
-        navigate('/', {
-            replace: true,
-            state: {
-                preserveAuth: true,
-                fromCall: true
-            }
-        });
-    };
+    // ✅ Sử dụng navigate thay vì window.location để giữ state
+    navigate('/', { 
+      replace: true,
+      state: { 
+        preserveAuth: true,
+        fromCall: true 
+      }
+    });
+  };
 
-    window.addEventListener('callEndedFromSocket', handleCallEndedFromSocket);
-    
-    return () => {
-        window.removeEventListener('callEndedFromSocket', handleCallEndedFromSocket);
-    };
+  window.addEventListener('callEndedFromSocket', handleCallEndedFromSocket);
+  
+  return () => {
+    window.removeEventListener('callEndedFromSocket', handleCallEndedFromSocket);
+  };
 }, [navigate]);
-
 
 
  // Tạo biến isLoading từ các trạng thái loading khác nhau

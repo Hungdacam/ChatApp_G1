@@ -210,54 +210,22 @@ createGroupCall: async (chatId, callType = 'video') => {
 // Kết thúc cuộc gọi
 // Trong useCallStore.jsx - endCall function
 // useCallStore.jsx - Sửa endCall function
-// useCallStore.jsx - Sửa endCall function
 endCall: async () => {
     const { call, callId } = get();
     
     try {
-        // ✅ Cleanup MediaStream tracks TRƯỚC KHI leave call
-        if (call) {
-            // ✅ Dừng tất cả local tracks (camera và microphone)
-            const localParticipant = call.state.localParticipant;
-            if (localParticipant) {
-                // Dừng video tracks
-                const videoTracks = localParticipant.videoStream?.getTracks() || [];
-                videoTracks.forEach(track => {
-                    if (track.readyState === 'live') {
-                        console.log('🎥 Stopping video track:', track.id);
-                        track.stop();
-                    }
-                });
-                
-                // Dừng audio tracks
-                const audioTracks = localParticipant.audioStream?.getTracks() || [];
-                audioTracks.forEach(track => {
-                    if (track.readyState === 'live') {
-                        console.log('🎤 Stopping audio track:', track.id);
-                        track.stop();
-                    }
-                });
-            }
-            
-            // ✅ Disable camera và microphone trước khi leave
-            try {
-                await call.camera.disable();
-                await call.microphone.disable();
-            } catch (error) {
-                console.log('Error disabling camera/mic:', error);
-            }
-        }
-        
-        // ✅ Gửi socket và API
+        // ✅ Gửi socket và API TRƯỚC khi reset state
         if (callId) {
             const socket = window.socketInstance;
             if (socket && socket.connected) {
                 socket.emit("end_call", { callId });
             }
+            
+            // Gọi API
             await axiosInstance.put(`/stream/call/${callId}/end`);
         }
         
-        // ✅ Leave call sau khi đã cleanup
+        // ✅ Leave call sau khi đã thông báo
         if (call) {
             const callingState = call.state.callingState;
             if (callingState !== 'left' && callingState !== 'idle') {
@@ -270,10 +238,10 @@ endCall: async () => {
         
     } catch (error) {
         console.error('Error ending call:', error);
+        // Vẫn reset state dù có lỗi
         set({ call: null, callId: null });
     }
 },
-
 
 
 
