@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { Alert } from 'react-native';
 import socket from './socket';
-
+import { globalEmitter } from '../globalEmitter';
 export const useSocketEvents = (currentUserId) => {
   const navigation = useNavigation();
 
@@ -27,7 +27,8 @@ export const useSocketEvents = (currentUserId) => {
           "✅ Kết bạn thành công",
           `${data.receiver.name} đã chấp nhận lời mời kết bạn của bạn!`
         );
-        if (currentUserId) {
+        globalEmitter.emit('friend_request_accepted', data); 
+       /*  if (currentUserId) {
           navigation.navigate('ChatScreen', {
             chatId: data.chatId,
             receiverId: data.receiver._id,
@@ -38,7 +39,7 @@ export const useSocketEvents = (currentUserId) => {
           });
         } else {
           console.warn('currentUserId chưa sẵn sàng, không thể điều hướng.');
-        }
+        } */
       } catch (error) {
         console.error('Lỗi hiển thị thông báo chấp nhận kết bạn:', error);
       }
@@ -51,6 +52,7 @@ export const useSocketEvents = (currentUserId) => {
           "❌ Lời mời bị từ chối",
           `${data.receiver.name} đã từ chối lời mời kết bạn của bạn.`
         );
+         
       } catch (error) {
         console.error('Lỗi hiển thị thông báo từ chối kết bạn:', error);
       }
@@ -167,7 +169,15 @@ export const useSocketEvents = (currentUserId) => {
         console.error('Lỗi hiển thị thông báo rời nhóm:', error);
       }
     });
-
+    socket.on('friend-request-canceled', (data) => {
+      try {
+        console.log("Lời mời kết bạn đã bị huỷ:", data);
+        // Gợi ý: reload danh sách lời mời nếu đang ở tab requests
+        // Có thể dùng EventEmitter hoặc context để gọi fetchFriendRequests trong Contact.tsx
+      } catch (error) {
+        console.error('Lỗi khi nhận friend-request-canceled:', error);
+      }
+    });
     // Cleanup khi component unmount
     return () => {
       socket.off('new_friend_request');
@@ -182,6 +192,8 @@ export const useSocketEvents = (currentUserId) => {
       socket.off('admin_removed');
       socket.off('member_left_group');
       socket.off('left_group');
+       socket.off('friend-request-canceled');
+
     };
   }, [navigation, currentUserId]);
 };

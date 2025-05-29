@@ -59,6 +59,14 @@ exports.cancelFriendRequest = async (req, res) => {
     if (!deleted) {
       return res.status(404).json({ message: 'Không tìm thấy lời mời để hủy' });
     }
+    const io = req.app.get('io');
+    const onlineUsers = req.app.get('onlineUsers');
+    const receiverSocketId = onlineUsers.get(receiverId.toString());
+
+    if (receiverSocketId) {
+      io.to(receiverSocketId).emit('friend-request-canceled', { senderId });
+    }
+
 
     res.status(200).json({ message: 'Đã hủy lời mời kết bạn' });
   } catch (error) {
@@ -270,13 +278,13 @@ exports.checkContacts = async (req, res) => {
       return res.status(400).json({ message: 'Danh sách số điện thoại không hợp lệ' });
     }
 
-    // Tìm người dùng có số điện thoại trong danh sách và không phải chính người gửi
+    // Tìm tất cả user đã đăng ký (trừ chính mình)
     const registeredUsers = await User.find({
       phone: { $in: phoneNumbers },
       _id: { $ne: userId },
     }).select('_id name avatar phone');
 
-    // Kiểm tra xem đã là bạn bè hoặc đã gửi lời mời chưa
+    // Lấy tất cả mối quan hệ liên quan
     const friendships = await Friendship.find({
       $or: [
         { userId1: userId, userId2: { $in: registeredUsers.map(u => u._id) } },
@@ -284,16 +292,28 @@ exports.checkContacts = async (req, res) => {
       ],
     });
 
-    const friendIds = friendships.map(f =>
-      f.userId1.toString() === userId.toString() ? f.userId2.toString() : f.userId1.toString()
-    );
+    // Map trạng thái cho từng user
+    const result = registeredUsers.map(user => {
+      const friendship = friendships.find(f =>
+        (f.userId1.toString() === userId.toString() && f.userId2.toString() === user._id.toString()) ||
+        (f.userId2.toString() === userId.toString() && f.userId1.toString() === user._id.toString())
+      );
+      if (!friendship) {
+        return { ...user.toObject(), friendStatus: "none", isSender: false };
+      }
+      if (friendship.status === "accepted") {
+        return { ...user.toObject(), friendStatus: "friends", isSender: false };
+      }
+      if (friendship.status === "pending") {
+        return {
+          ...user.toObject(),
+          friendStatus: "pending",
+          isSender: friendship.userId1.toString() === userId.toString(),
+        };
+      }
+    });
 
-    // Lọc ra những người dùng chưa là bạn bè và chưa có lời mời
-    const availableUsers = registeredUsers.filter(
-      user => !friendIds.includes(user._id.toString())
-    );
-
-    res.status(200).json({ registeredUsers: availableUsers });
+    res.status(200).json({ registeredUsers: result });
   } catch (error) {
     console.error('Lỗi kiểm tra danh bạ:', error);
     res.status(500).json({ message: 'Lỗi server', error: error.message });

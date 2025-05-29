@@ -21,6 +21,7 @@ import { useNavigation } from "@react-navigation/native";
 import * as Contacts from "expo-contacts";
 import * as DocumentPicker from "expo-document-picker";
 import styles from "../style/ContactStyle";
+import socket from "../config/socket";
 export default function Contact() {
   const [requests, setRequests] = useState([]);
   const [friends, setFriends] = useState([]);
@@ -225,6 +226,31 @@ export default function Contact() {
     }, [selectedTab])
   );
 
+useEffect(() => {
+  const handler = () => {
+    if (selectedTab === "requests") {
+      Alert.alert("Thông báo", "Một lời mời kết bạn đã bị huỷ.");
+      fetchFriendRequests();
+    }
+  };
+  socket.on("friend-request-canceled", handler);
+  return () => {
+    socket.off("friend-request-canceled", handler);
+  };
+}, [selectedTab]);
+
+useEffect(() => {
+  const handler = () => {
+    if (selectedTab === "requests") {
+      fetchFriendRequests();
+    }
+  };
+  socket.on("new_friend_request", handler);
+  return () => {
+    socket.off("new_friend_request", handler);
+  };
+}, [selectedTab]);
+
   const fetchFriendRequests = async () => {
     try {
       setIsLoading(true);
@@ -352,13 +378,88 @@ export default function Contact() {
 
       Alert.alert("Thành công", "Đã gửi lời mời kết bạn.");
       setContacts((prev) =>
-        prev.filter((contact) => contact._id !== receiverId)
+        prev.map((contact) =>
+          contact._id === receiverId
+            ? { ...contact, friendStatus: "pending", isSender: true }
+            : contact
+        )
       );
     } catch (error) {
       console.error("Lỗi gửi lời mời kết bạn:", error.response?.data);
       Alert.alert(
         "Lỗi",
         error.response?.data?.message || "Không thể gửi lời mời kết bạn."
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const cancelFriendRequest = async (receiverId) => {
+    try {
+      setIsLoading(true);
+      const token = await AsyncStorage.getItem("token");
+      if (!token) throw new Error("Không tìm thấy token");
+      const parsedToken = JSON.parse(token);
+
+      await axios.post(
+        `${BASE_URL}/api/friends/cancel-request`,
+        { receiverId },
+        {
+          headers: {
+            Authorization: `Bearer ${parsedToken.token}`,
+          },
+        }
+      );
+
+      Alert.alert("Thành công", "Đã huỷ lời mời kết bạn.");
+      setContacts((prev) =>
+        prev.map((contact) =>
+          contact._id === receiverId
+            ? { ...contact, friendStatus: "none", isSender: false }
+            : contact
+        )
+      );
+    } catch (error) {
+      console.error("Lỗi huỷ lời mời kết bạn:", error.response?.data);
+      Alert.alert(
+        "Lỗi",
+        error.response?.data?.message || "Không thể huỷ lời mời kết bạn."
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const unfriendUser = async (friendId) => {
+    try {
+      setIsLoading(true);
+      const token = await AsyncStorage.getItem("token");
+      if (!token) throw new Error("Không tìm thấy token");
+      const parsedToken = JSON.parse(token);
+
+      await axios.post(
+        `${BASE_URL}/api/friends/unfriend`,
+        { friendId },
+        {
+          headers: { Authorization: `Bearer ${parsedToken.token}` },
+        }
+      );
+
+      Alert.alert("Thành công", "Đã huỷ kết bạn.");
+      setContacts((prev) =>
+        prev.map((contact) =>
+          contact._id === friendId
+            ? { ...contact, friendStatus: "none", isSender: false }
+            : contact
+        )
+      );
+      fetchFriends(); // cập nhật lại danh sách bạn bè
+    } catch (error) {
+      console.error("Lỗi huỷ kết bạn:", error.response?.data);
+      Alert.alert(
+        "Lỗi",
+        error.response?.data?.message || "Không thể huỷ kết bạn."
       );
     } finally {
       setIsLoading(false);
@@ -452,12 +553,60 @@ export default function Contact() {
         <View style={styles.infoContainer}>
           <Text style={styles.senderName}>{item.contactName}</Text>
           <Text>{formatPhone(item.phone)}</Text>
-          <TouchableOpacity
-            style={[styles.button, { backgroundColor: "#007BFF" }]}
-            onPress={() => sendFriendRequest(item._id)}
-          >
-            <Text style={styles.buttonText}>Kết bạn</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: "row", marginTop: 6 }}>
+            {/* Nút trạng thái bạn bè/kết bạn/huỷ lời mời */}
+            {item.friendStatus === "friends" ? (
+              <>
+                <TouchableOpacity
+                  style={[styles.button, { backgroundColor: "#aaa", marginRight: 8 }]}
+                  disabled
+                >
+                  <Text style={styles.buttonText}>Bạn bè</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.button, { backgroundColor: "#DC3545", marginRight: 8 }]}
+                  onPress={() => unfriendUser(item._id)}
+                >
+                  <Text style={styles.buttonText}>Huỷ kết bạn</Text>
+                </TouchableOpacity>
+              </>
+            ) : item.friendStatus === "pending" && item.isSender ? (
+              <TouchableOpacity
+                style={[styles.button, { backgroundColor: "#DC3545", marginRight: 8 }]}
+                onPress={() => cancelFriendRequest(item._id)}
+              >
+                <Text style={styles.buttonText}>Huỷ lời mời</Text>
+              </TouchableOpacity>
+            ) : item.friendStatus === "pending" && !item.isSender ? (
+              <TouchableOpacity style={[styles.button, { backgroundColor: "#aaa", marginRight: 8 }]} disabled>
+                <Text style={styles.buttonText}>Đã được mời</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={[styles.button, { backgroundColor: "#007BFF", marginRight: 8 }]}
+                onPress={() => sendFriendRequest(item._id)}
+              >
+                <Text style={styles.buttonText}>Kết bạn</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Nút xem trang cá nhân */}
+            <TouchableOpacity
+              style={[styles.button, { backgroundColor: "#1976d2" }]}
+              onPress={() =>
+                navigation.navigate("UserProfile", {
+                  user: {
+                    id: item._id,
+                    name: item.name || item.contactName,
+                    phone: item.phone,
+                    avatar: item.avatar,
+                  },
+                })
+              }
+            >
+              <Text style={styles.buttonText}>Xem trang cá nhân</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </View>

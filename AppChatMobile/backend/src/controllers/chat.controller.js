@@ -17,7 +17,10 @@ exports.sendMessage = async (req, res) => {
     let fileUrl = null;
     let fileName = null;
     let videoUrls = [];
-
+if (req.body.image) imageUrl = req.body.image;
+if (req.body.video) videoUrl = req.body.video;
+if (req.body.fileUrl) fileUrl = req.body.fileUrl;
+if (req.body.fileName) fileName = req.body.fileName;
     console.log("Request body:", req.body);
     console.log("Request files:", req.files);
 
@@ -443,9 +446,22 @@ exports.pinMessage = async (req, res) => {
       return res.status(404).json({ message: "Không tìm thấy tin nhắn." });
     }
 
-    // Chỉ cho phép ghim tối đa 3 tin nhắn mỗi chat
-    const pinnedCount = await Message.countDocuments({ chatId: message.chatId, isPinned: true });
-    if (pinnedCount >= 3) return res.status(400).json({ message: "Chỉ được ghim tối đa 3 tin nhắn." });
+    // Thêm xác định loại tin nhắn
+    let type = "text";
+    if (message.image) type = "image";
+    else if (message.video) type = "video";
+    else if (message.fileUrl) type = "file";
+
+    // Đếm số lượng tin nhắn ghim cùng loại
+    const pinnedCount = await Message.countDocuments({
+      chatId: message.chatId,
+      isPinned: true,
+      ...(type === "image" && { image: { $ne: null } }),
+      ...(type === "video" && { video: { $ne: null } }),
+      ...(type === "file" && { fileUrl: { $ne: null } }),
+      ...(type === "text" && { image: null, video: null, fileUrl: null }),
+    });
+    if (pinnedCount >= 3) return res.status(400).json({ message: "Chỉ được ghim tối đa 3 tin nhắn cùng loại." });
 
     message.isPinned = true;
     message.pinnedAt = new Date();
@@ -457,7 +473,8 @@ exports.pinMessage = async (req, res) => {
     io.to(message.chatId).emit("message_pinned", {
   messageId: message.messageId,
   senderName: req.user.name,
-  content: message.content
+  content: message.content,
+    fileName: message.fileName, 
 });
 
     res.status(200).json({ message: "Đã ghim tin nhắn", messageId: message.messageId }

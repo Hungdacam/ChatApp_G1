@@ -34,10 +34,7 @@ const AddFriendScreen = () => {
 
       const currentUserPhone = parsedToken.user?.phone;
   
-      if (formattedPhone === currentUserPhone) {
-        Alert.alert("Thông báo", "Bạn không thể tìm chính mình.");
-        return;
-      }
+     
 
       const response = await axios.post(
        `${BASE_URL}/api/auth/find-user-by-phone`,

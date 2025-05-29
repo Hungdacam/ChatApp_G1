@@ -2,7 +2,7 @@ import { StyleSheet } from "react-native";
 export default StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: "#f7fafd",
   },
   container: {
     flex: 1,
@@ -12,18 +12,26 @@ export default StyleSheet.create({
     alignItems: "center",
     padding: 15,
     borderBottomWidth: 1,
-    borderColor: "#eee",
+    borderColor: "#e3e6eb",
+    backgroundColor: "#fff",
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
   },
   headerAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 10,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: "#e3e6eb",
   },
   headerText: {
     fontSize: 20,
     fontWeight: "bold",
     color: "#222",
+    letterSpacing: 0.2,
   },
   messageList: {
     flex: 1,
@@ -32,24 +40,31 @@ export default StyleSheet.create({
   inputContainer: {
     padding: 10,
     borderTopWidth: 1,
-    borderColor: "#eee",
+    borderColor: "#e3e6eb",
+    backgroundColor: "#fff",
   },
   inputRow: {
     flexDirection: "row",
     alignItems: "center",
+    backgroundColor: "#f2f4f7",
+    borderRadius: 24,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
   input: {
     flex: 1,
     height: 40,
-    borderWidth: 1,
-    borderColor: "#ddd",
+    borderWidth: 0,
     borderRadius: 20,
-    padding: 10,
-    marginRight: 10,
+    paddingHorizontal: 12,
+    backgroundColor: "#f2f4f7",
+    fontSize: 15,
+    color: "#222",
+    marginRight: 8,
   },
   iconButton: {
     padding: 5,
-    marginRight: 5,
+    marginRight: 2,
   },
   emojiModal: {
     backgroundColor: "#fff",
@@ -67,50 +82,46 @@ export default StyleSheet.create({
     marginBottom: 10,
     width: "100%",
   },
-  filePreviewText: {
-    flex: 1,
-    color: "#333",
-    flexWrap: "wrap",
-    fontSize: 14,
-  },
-
   messageRow: {
     alignItems: "flex-end",
   },
   messageAvatar: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    marginHorizontal: 5,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    marginHorizontal: 6,
+    borderWidth: 1,
+    borderColor: "#e3e6eb",
   },
-messageContainer: {
-  marginBottom: 18, // tăng khoảng cách (mặc định là 10)
-  alignSelf: "flex-start",
-  maxWidth: "90%",
-  minWidth: "40%",
-  width: "100%", // Thêm dòng này
-},
-
-messageContent: {
-  padding: 10,
-  borderRadius: 10,
-  maxWidth: "100%",
-  width: "100%", // Thêm dòng này
-  flexShrink: 1,
-  backgroundColor: "#f0f0f0", // hoặc "#007AFF" cho user hiện tại
-  overflow: "hidden", // đảm bảo không bị tràn
-},
-
+  messageContainer: {
+    marginBottom: 14,
+    alignSelf: "flex-start",
+    maxWidth: "75%", // Giới hạn chiều rộng tối đa
+    minWidth: 60,
+    flexShrink: 1,
+  },
+  messageContent: {
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: "#f2f4f7",
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    elevation: 1,
+    // XÓA maxWidth: "100%" nếu có
+  },
   senderName: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: "bold",
-    color: "#333",
-    marginBottom: 5,
+    color: "#1976d2",
+    marginBottom: 4,
   },
   messageText: {
-    fontSize: 14,
+    fontSize: 15,
     fontStyle: "normal",
-    flexWrap: "wrap", // đảm bảo text xuống dòng
+    flexWrap: "wrap",
+    color: "#222",
   },
   messageImage: {
     width: 200,
@@ -124,203 +135,208 @@ messageContent: {
     borderRadius: 10,
     marginBottom: 5,
   },
-messageFooter: {
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "space-between", // thêm dòng này
-  marginTop: 5,
-  width: "100%", // để căn đều theo khung tin nhắn
-},
-
+  messageFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 5,
+    width: "100%",
+    justifyContent: "flex-start", // Luôn sát trái
+  },
   messageTime: {
-    fontSize: 10,
-    marginRight: 5,
+    fontSize: 11,
+    marginLeft: 2,
+    color: "#888",
+    opacity: 1,
+    textAlign: "left",
   },
   messageStatus: {
-    fontSize: 10,
-    color: "#ddd",
+    fontSize: 11,
+    color: "#bbb",
   },
-  forwardModal: {
-    justifyContent: "center",
+  replyBox: {
+    backgroundColor: "#e9f2fb",
+    borderLeftWidth: 3,
+    borderLeftColor: "#1976d2",
+    padding: 7,
+    marginBottom: 5,
+    borderRadius: 6,
+    alignSelf: "flex-start", // Mặc định cho tin nhắn người khác
+  },
+  replySenderName: {
+    fontWeight: "bold",
+    color: "#1976d2",
+    marginBottom: 2,
+    fontSize: 15,
+  },
+  replyText: {
+    fontStyle: "italic",
+    color: "#555",
+    flexWrap: "wrap",
+    fontSize: 14,
+  },
+  replyPreview: {
+    flexDirection: "row",
     alignItems: "center",
+    backgroundColor: "#e9f2fb",
+    borderLeftWidth: 3,
+    borderLeftColor: "#1976d2",
+    padding: 7,
+    borderRadius: 6,
+    marginBottom: 6,
+    marginLeft: 2,
+  },
+  forwardedBox: {
+    backgroundColor: "#f5f5f5",
+    borderLeftWidth: 3,
+    borderLeftColor: "#ff9800",
+    padding: 6,
+    marginBottom: 4,
+    borderRadius: 4,
+    maxWidth: "100%",
+  },
+  pinnedBanner: {
+    backgroundColor: "#fff8dc",
+    padding: 8,
+    borderBottomColor: "#ccc",
+    borderBottomWidth: 1,
+  },
+  pinnedText: {
+    fontSize: 14,
+    color: "#333",
+  },
+  pinnedItem: {
+    padding: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
+  },
+  pinnedItemLarge: {
+    backgroundColor: "#fffbe7",
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "#ffe082",
+    width: "100%",           // Thêm dòng này để full chiều rộng modal
+    alignSelf: "stretch",    // Đảm bảo kéo giãn hết modal
+   
+  },
+  pinnedSender: {
+    fontWeight: "bold",
+    color: "#1976d2",
+    marginBottom: 4,
+  },
+  pinnedContent: {
+    fontSize: 15,
+    color: "#333",
+    marginBottom: 8,
+  },
+  unpinButton: {
+    alignSelf: "flex-end",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    backgroundColor: "#ffb300",
+    borderRadius: 5,
+  },
+  unpinButtonText: {
+    color: "#fff",
+    fontWeight: "bold",
+  },
+  pinNotification: {
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    alignSelf: "center",
+    marginVertical: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
   },
   modalContent: {
     backgroundColor: "#fff",
-    borderRadius: 10,
-    padding: 20,
-    width: "80%",
-    maxHeight: "70%",
-           
-    justifyContent: "center",    
-    alignSelf: "center",        
+    borderRadius: 18,
+    padding: 18,
+    alignItems: "stretch",   
+    shadowColor: "#000",
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 8,
+    marginHorizontal: 20,
+    width: "90%",            
+    alignSelf: "center",    
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: "bold",
-    marginBottom: 10,
-    textAlign: "center",
+    marginBottom: 12,
+    color: "#1976d2",
+    alignSelf: "center",
   },
   chatItem: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
     borderBottomWidth: 1,
-    borderColor: "#eee",
+    borderBottomColor: "#eee",
+    width: "100%",
   },
   chatAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     marginRight: 10,
   },
   chatName: {
     fontSize: 16,
-    color: "#333",
-  },
-  emptyText: {
-    textAlign: "center",
-    color: "#666",
-    padding: 10,
+    color: "#222",
   },
   closeButton: {
-    marginTop: 10,
-    padding: 10,
-    backgroundColor: "#007AFF",
-    borderRadius: 5,
-    alignItems: "center",
+    marginTop: 16,
+    backgroundColor: "#1976d2",
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 24,
+    alignSelf: "center",
   },
   closeButtonText: {
     color: "#fff",
+    fontWeight: "bold",
     fontSize: 16,
   },
-  callContainer: {
-    flex: 1,
-    backgroundColor: "#000",
+  emptyText: {
+    color: "#888",
+    fontStyle: "italic",
+    marginTop: 10,
+    alignSelf: "center",
   },
-  endCallButton: {
-    backgroundColor: "#ff3b30",
-    padding: 10,
-    borderRadius: 5,
-    alignItems: "center",
-    margin: 10,
-  },
-  filePreviewContainer: {
-    flexDirection: "column", // Thay đổi từ "row" thành "column" để xếp thumbnail và thông tin dọc
-    alignItems: "flex-start",   // Căn giữa các phần tử
-    padding: 5,
-    borderRadius: 5,
-    width: 150, // Đặt chiều rộng cố định để giữ tỷ lệ
-  },
-  filePreviewIcon: {
-    width: 40,
-    height: 40,
-    marginBottom: 5, // Khoảng cách giữa thumbnail và thông tin
-  },
-  fileInfo: {
-    flexDirection: "column", // Xếp tên file và chi tiết theo cột
-    alignItems: "flex-start",   // Căn giữa
-  },
-  fileNameText: {
-    fontSize: 14,
-    fontWeight: "bold",
-    textAlign: "left", // Căn trái tên file
-  },
-  fileDetails: {
-    fontSize: 12,
-    textAlign: "center", // Căn giữa chi tiết
-  },
-  replyBox: {
-  backgroundColor: "#e6e6e6",
-  borderLeftWidth: 3,
-  borderLeftColor: "#007AFF",
-  padding: 6,
-  marginBottom: 4,
-  borderRadius: 4,
-  maxWidth: "100%",
-  width: "100%", // Thêm dòng này
-  alignSelf: "flex-start", // Thêm dòng này
-},
-
-replySenderName: {
-  fontWeight: "bold",
-  color: "#007AFF",
-  marginBottom: 2,
-  fontSize: 15,
-},
-
-replyText: {
-  fontStyle: "italic",
-  color: "#555",
-  flexWrap: "wrap",
-  fontSize: 14,
-},
-forwardedBox: {
-  backgroundColor: "#f5f5f5",
-  borderLeftWidth: 3,
-  borderLeftColor: "#ff9800",
-  padding: 6,
-  marginBottom: 4,
-  borderRadius: 4,
-  maxWidth: "100%",
-},
-pinnedBanner: {
-  backgroundColor: "#fff8dc",
-  padding: 8,
-  borderBottomColor: "#ccc",
-  borderBottomWidth: 1,
-},
-pinnedText: {
-  fontSize: 14,
-  color: "#333",
-},
-pinnedItem: {
-  padding: 10,
-  borderBottomWidth: 1,
-  borderBottomColor: "#eee",
-},
-pinnedItemLarge: {
-  backgroundColor: "#fffbe7",
-  borderRadius: 8,
-  padding: 12,
-  marginBottom: 10,
-  borderWidth: 1,
-  borderColor: "#ffe082",
-},
-pinnedSender: {
-  fontWeight: "bold",
-  color: "#007AFF",
-  marginBottom: 4,
-},
-pinnedContent: {
-  fontSize: 15,
-  color: "#333",
-  marginBottom: 8,
-},
-unpinButton: {
-  alignSelf: "flex-end",
-  paddingHorizontal: 10,
-  paddingVertical: 4,
-  backgroundColor: "#ffb300",
-  borderRadius: 5,
-},
-unpinButtonText: {
-  color: "#fff",
-  fontWeight: "bold",
-},
-
-pinNotification: {
-  backgroundColor: "#fff",
-  borderRadius: 20,
-  paddingVertical: 8,
-  paddingHorizontal: 16,
-  alignSelf: "center",
-  marginVertical: 8,
+  fileBlock: {
   flexDirection: "row",
   alignItems: "center",
-  shadowColor: "#000",
-  shadowOpacity: 0.08,
-  shadowRadius: 4,
-  elevation: 2,
+  backgroundColor: "#f5f7fa",
+  borderRadius: 10,
+  padding: 10,
+  marginVertical: 4,
+  maxWidth: 340,    // tăng từ 260 lên 340 (hoặc lớn hơn nếu muốn)
+  minWidth: 160,    // tăng từ 120 lên 160
+  borderWidth: 1,
+  borderColor: "#b3c6e7",
 },
-
+fileIcon: {
+  marginRight: 10,
+},
+fileName: {
+  color: "#1976d2",
+  fontWeight: "bold",
+  fontSize: 15,
+  textDecorationLine: "underline",
+},
+fileType: {
+  color: "#888",
+  fontSize: 12,
+  marginTop: 2,
+},
 });

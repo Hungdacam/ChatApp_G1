@@ -11,19 +11,63 @@ import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { BASE_URL } from "../config/config";
 import styles from "../style/UserProfileStyle"; 
+import { globalEmitter } from "../globalEmitter";
+import { useIsFocused } from "@react-navigation/native";
+import { socket } from "../config/socket";
 const UserProfileScreen = ({ route }) => {
   const { user } = route.params;
   const [isRequestSent, setIsRequestSent] = useState(false);
   const [isFriend, setIsFriend] = useState(false);
   const [isSelf, setIsSelf] = useState(false);
+const isFocused = useIsFocused();
 
+
+useEffect(() => {
+  const checkCurrentUser = async () => {
+    const token = await AsyncStorage.getItem("token");
+    const parsedToken = JSON.parse(token);
+    const currentUserId = parsedToken.user?._id;
+    setIsSelf(user._id === currentUserId || user.id === currentUserId);
+  };
+  checkCurrentUser();
+}, [user]);
+useEffect(() => {
+  const reloadStatus = (data) => {
+    // Nếu đang xem đúng profile thì reload
+    if (user && (user._id === data.receiver._id || user.id === data.receiver._id)) {
+      checkFriendStatus();
+      checkRequestStatus();
+    }
+  };
+  globalEmitter.on('friend_request_accepted', reloadStatus);
+  return () => {
+    globalEmitter.off('friend_request_accepted', reloadStatus);
+  };
+}, [user]);
+useEffect(() => {
+  if (isFocused) {
+    checkFriendStatus();
+    checkRequestStatus();
+  }
+}, [isFocused]);
   useEffect(() => {
     checkCurrentUser();
     checkFriendStatus();
     checkRequestStatus();
   }, []);
 
-  const checkCurrentUser = async () => {
+useEffect(() => {
+  if (!socket) return;
+  const handleAccepted = (data) => {
+    console.log("Nhận được friend_request_accepted:", data);
+    checkFriendStatus();
+    checkRequestStatus();
+  };
+  socket.on("friend_request_accepted", handleAccepted);
+  return () => {
+    socket.off("friend_request_accepted", handleAccepted);
+  };
+}, [user]);  const checkCurrentUser = async () => {
     try {
       const token = await AsyncStorage.getItem('token');
       if (!token) throw new Error('Không tìm thấy token');
@@ -59,10 +103,8 @@ const UserProfileScreen = ({ route }) => {
   
       const friends = response.data;
       const isAlreadyFriend = friends.some((friend) => {
-        console.log('So sánh Friend ID:', friend._id, 'với User ID:', user.id); // Debug
-        return friend._id === user.id;
+        return friend._id === (user._id || user.id);
       });
-      console.log('Kết quả isFriend:', isAlreadyFriend); // Debug
       setIsFriend(isAlreadyFriend);
     } catch (error) {
       console.error('Lỗi kiểm tra trạng thái bạn bè:', error.message);
@@ -82,7 +124,7 @@ const UserProfileScreen = ({ route }) => {
 
       const sentRequests = response.data.requests;
       const isRequestPending = sentRequests.some(
-        (request) => request.userId2._id === user.id
+        (request) => request.userId2._id === (user._id || user.id)
       );
       setIsRequestSent(isRequestPending);
     } catch (error) {
@@ -189,49 +231,49 @@ const UserProfileScreen = ({ route }) => {
       <Text style={styles.info}>Tên: {user.name}</Text>
       <Text style={styles.info}>SĐT: {formatPhone(user.phone)}</Text>
       <Text style={styles.info}>Ngày sinh: {formatDate(user.dob)}</Text>
+{!isSelf && (
+  isFriend ? (
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+      <TouchableOpacity
+        style={[
+          styles.button,
+          {
+            backgroundColor: '#6C757D',
+            flex: 1,
+            marginRight: 10,
+          },
+        ]}
+        disabled
+      >
+        <Text style={styles.buttonText}>Đã là bạn bè</Text>
+      </TouchableOpacity>
 
-      {isFriend ? (
-  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+      <TouchableOpacity
+        style={[
+          styles.button,
+          {
+            backgroundColor: '#DC3545',
+            flex: 1,
+            marginLeft: 10,
+          },
+        ]}
+        onPress={unfriendUser}
+      >
+        <Text style={styles.buttonText}>Hủy kết bạn</Text>
+      </TouchableOpacity>
+    </View>
+  ) : (
     <TouchableOpacity
-      style={[
-        styles.button,
-        {
-          backgroundColor: '#6C757D',
-          flex: 1,
-          marginRight: 10,
-        },
-      ]}
-      disabled
+      style={[styles.button, { backgroundColor: isRequestSent ? '#DC3545' : '#28A745' }]}
+      onPress={isRequestSent ? cancelFriendRequest : sendFriendRequest}
     >
-      <Text style={styles.buttonText}>Đã là bạn bè</Text>
+      <Text style={styles.buttonText}>
+        {isRequestSent ? 'Hủy lời mời kết bạn' : 'Gửi lời mời kết bạn'}
+      </Text>
     </TouchableOpacity>
-
-    <TouchableOpacity
-      style={[
-        styles.button,
-        {
-          backgroundColor: '#DC3545',
-          flex: 1,
-          marginLeft: 10,
-        },
-      ]}
-      onPress={unfriendUser}
-    >
-      <Text style={styles.buttonText}>Hủy kết bạn</Text>
-    </TouchableOpacity>
-
-    
-  </View>
-) : (
-  <TouchableOpacity
-    style={[styles.button, { backgroundColor: isRequestSent ? '#DC3545' : '#28A745' }]}
-    onPress={isRequestSent ? cancelFriendRequest : sendFriendRequest}
-  >
-    <Text style={styles.buttonText}>
-      {isRequestSent ? 'Hủy lời mời kết bạn' : 'Gửi lời mời kết bạn'}
-    </Text>
-  </TouchableOpacity>
+  )
 )}
+
     </View>
   );
 };
