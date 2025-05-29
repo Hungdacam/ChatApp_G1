@@ -4,9 +4,11 @@ const friendRoutes = require('./routes/friends.route');
 const chatRoutes = require('./routes/chat.route');
 const groupRoutes = require('./routes/group.route');
 const callRoutes = require('./routes/call.route');
+
 const http = require('http');
 const socketio = require('socket.io');
 const StreamCall = require('./models/call.model');
+
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const dotenv = require('dotenv');
@@ -150,36 +152,48 @@ io.on('connection', (socket) => {
 socket.on("end_call", async (data) => {
   console.log("📞 Nhận sự kiện end_call:", data);
   const { callId } = data;
-
+  
   try {
-    const call = await StreamCall.findOne({ callId });
-    
-    if (call) {
-      // Cập nhật trạng thái cuộc gọi
-      call.status = 'ended';
-      call.endTime = new Date();
-      if (call.startTime) {
-        call.duration = Math.floor((call.endTime - call.startTime) / 1000);
-      }
-      await call.save(); // ✅ Await save()
-
-      // Thông báo cho tất cả người tham gia
-      call.participants.forEach(userId => {
-        const targetSocketId = findUserSocket(userId.toString());
-        if (targetSocketId) {
-          console.log(`📤 Gửi thông báo call_ended đến user ${userId}`);
-          io.to(targetSocketId).emit("call_ended", { callId });
+    // ✅ Populate participants để lấy thông tin đầy đủ
+   const call = await StreamCall.findOne({ callId }).populate('participants', '_id name avatar');
+    if (!call || !call.participants) {
+            console.log("⚠️ Không tìm thấy cuộc gọi hoặc participants:", callId);
+            return;
         }
-      });
+
+    // ✅ Cập nhật trạng thái call
+    call.status = 'ended';
+    call.endTime = new Date();
+    
+    // ✅ Kiểm tra startTime trước khi tính duration
+    if (call.startTime) {
+      call.duration = Math.floor((call.endTime - call.startTime) / 1000);
     } else {
-      console.log("⚠️ Không tìm thấy cuộc gọi với ID:", callId);
+      call.duration = 0;
+      call.startTime = call.createdAt || call.endTime;
     }
-  } catch (error) {
-    console.error("Lỗi khi xử lý end_call:", error);
-    // ✅ Vẫn thông báo kết thúc cuộc gọi cho client
-    socket.emit("call_ended", { callId, error: true });
+    
+    await call.save();
+
+    setTimeout(() => {
+                call.participants.forEach(participant => {
+                    const participantId = participant._id.toString();
+                    const targetSocketId = findUserSocket(participantId);
+                    if (targetSocketId) {
+                        io.to(targetSocketId).emit("call_ended", {
+                            callId,
+                            endedBy: socket.userId || 'unknown',
+                            message: 'Cuộc gọi đã kết thúc'
+                        });
+                    }
+                });
+            }, 100); // Delay 100ms
+        } catch (error) {
+    console.error("❌ Lỗi khi xử lý end_call:", error);
   }
 });
+
+
 
 
 // Khi cuộc gọi được chấp nhận

@@ -662,29 +662,66 @@ socket.on("forward_error", (data) => {
   }
 });
 
+// useSocketStore.jsx - Thay thế logic trong sự kiện call_ended
 socket.on("call_ended", (data) => {
-  console.log("📞 Cuộc gọi đã kết thúc:", data);
-  const { callId } = data;
-  
-  // Nếu đang trong cuộc gọi này, kết thúc nó
-  const callStore = useCallStore.getState();
-  if (callStore.callId === callId && callStore.call) {
-    toast.info("Cuộc gọi đã kết thúc");
+    console.log("📞 Cuộc gọi đã kết thúc:", data);
+    const { callId, endedBy, timestamp } = data;
+    const callStore = useCallStore.getState();
     
-    // Kết thúc cuộc gọi trên client
-    if (callStore.call) {
-      callStore.call.leave().catch(console.error);
+    // ✅ Kiểm tra callId khớp
+    if (callStore.callId === callId) {
+        console.log("✅ CallId khớp, xử lý kết thúc cuộc gọi");
+        
+        toast.info("Cuộc gọi đã kết thúc");
+        
+        // ✅ Leave call nếu đang active
+        if (callStore.call) {
+            const callingState = callStore.call.state.callingState;
+            console.log("📊 Current calling state:", callingState);
+            
+            if (callingState !== 'left' && callingState !== 'idle') {
+                callStore.call.leave().catch((error) => {
+                    if (!error.message?.includes('already been left')) {
+                        console.error("Error leaving call on socket event:", error);
+                    }
+                });
+            }
+        }
+
+        // ✅ Reset state
+        callStore.setCallState({
+            call: null,
+            callId: null,
+            error: null,
+            incomingCall: null
+        });
+
+        /// ✅ Chỉ gửi event navigation nếu đang ở CallPage
+        if (window.location.pathname.includes('/call/')) {
+            console.log("🔄 Đang ở CallPage, gửi event navigation");
+            
+            // ✅ Thêm timeout để đảm bảo state được reset
+            setTimeout(() => {
+                const event = new CustomEvent('callEndedFromSocket', { 
+                    detail: { 
+                        callId, 
+                        endedBy, 
+                        timestamp,
+                        reason: 'ended_by_peer' 
+                    } 
+                });
+                window.dispatchEvent(event);
+            }, 100);
+        }
+    } else {
+        console.log("⚠️ CallId không khớp:", {
+            received: callId,
+            current: callStore.callId
+        });
     }
-    
-    // Reset state
-    callStore.reset();
-    
-    // Chuyển hướng về trang chủ nếu đang ở trang cuộc gọi
-    if (window.location.pathname.includes('/call/')) {
-      window.location.href = '/';
-    }
-  }
 });
+
+
 
 
 socket.on("call_rejected", (data) => {

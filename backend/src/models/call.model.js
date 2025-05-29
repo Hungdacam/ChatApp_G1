@@ -8,12 +8,12 @@ const streamCallSchema = new mongoose.Schema({
   },
   initiator: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+    ref: 'user',
     required: true
   },
   participants: [{
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
+    ref: 'user'
   }],
   status: {
     type: String,

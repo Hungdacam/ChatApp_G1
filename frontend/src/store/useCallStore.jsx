@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import axiosInstance from '../lib/axios';
 import { StreamVideoClient } from '@stream-io/video-react-sdk';
 import useAuthStore from './useAuthStore';
+import {useChatStore} from './useChatStore';
 // Không import useSocketStore để tránh circular dependency
 // import { useSocketStore } from './useSocketStore';
 
@@ -207,31 +208,77 @@ createGroupCall: async (chatId, callType = 'video') => {
 },
   
 // Kết thúc cuộc gọi
-// Kết thúc cuộc gọi
+// Trong useCallStore.jsx - endCall function
+// useCallStore.jsx - Sửa endCall function
+// useCallStore.jsx - Sửa endCall function
 endCall: async () => {
-  const { call, callId } = get();
-  try {
-    if (call) {
-      await call.leave();
-    }
+    const { call, callId } = get();
     
-    if (callId) {
-      await axiosInstance.put(`/stream/call/${callId}/end`);
-      
-      // Gửi thông báo đến người còn lại
-      const socket = window.socketInstance;
-      if (socket) {
-        console.log("📤 Gửi sự kiện end_call với callId:", callId);
-        socket.emit("end_call", { callId });
-      }
+    try {
+        // ✅ Cleanup MediaStream tracks TRƯỚC KHI leave call
+        if (call) {
+            // ✅ Dừng tất cả local tracks (camera và microphone)
+            const localParticipant = call.state.localParticipant;
+            if (localParticipant) {
+                // Dừng video tracks
+                const videoTracks = localParticipant.videoStream?.getTracks() || [];
+                videoTracks.forEach(track => {
+                    if (track.readyState === 'live') {
+                        console.log('🎥 Stopping video track:', track.id);
+                        track.stop();
+                    }
+                });
+                
+                // Dừng audio tracks
+                const audioTracks = localParticipant.audioStream?.getTracks() || [];
+                audioTracks.forEach(track => {
+                    if (track.readyState === 'live') {
+                        console.log('🎤 Stopping audio track:', track.id);
+                        track.stop();
+                    }
+                });
+            }
+            
+            // ✅ Disable camera và microphone trước khi leave
+            try {
+                await call.camera.disable();
+                await call.microphone.disable();
+            } catch (error) {
+                console.log('Error disabling camera/mic:', error);
+            }
+        }
+        
+        // ✅ Gửi socket và API
+        if (callId) {
+            const socket = window.socketInstance;
+            if (socket && socket.connected) {
+                socket.emit("end_call", { callId });
+            }
+            await axiosInstance.put(`/stream/call/${callId}/end`);
+        }
+        
+        // ✅ Leave call sau khi đã cleanup
+        if (call) {
+            const callingState = call.state.callingState;
+            if (callingState !== 'left' && callingState !== 'idle') {
+                await call.leave();
+            }
+        }
+        
+        // ✅ Reset state cuối cùng
+        set({ call: null, callId: null });
+        
+    } catch (error) {
+        console.error('Error ending call:', error);
+        set({ call: null, callId: null });
     }
-    
-    set({ call: null, callId: null });
-  } catch (error) {
-    console.error('Error ending call:', error);
-    toast.error('Lỗi khi kết thúc cuộc gọi');
-  }
 },
+
+
+
+
+
+
 
 // Xử lý khi người dùng từ chối cuộc gọi
 rejectIncomingCall: async () => {
@@ -273,12 +320,31 @@ setCallState: (newState) => {
   
   // Reset store
   reset: () => {
-    const { call } = get();
-    if (call) {
-      call.leave().catch(console.error);
+  const { call } = get();
+  
+  if (call) {
+    // ✅ Kiểm tra trạng thái trước khi leave
+    const callingState = call.state.callingState;
+    
+    if (callingState !== 'left' && callingState !== 'idle') {
+      call.leave().catch((error) => {
+        // ✅ Bỏ qua lỗi "already left"
+        if (!error.message?.includes('already been left')) {
+          console.error("Error in reset leave:", error);
+        }
+      });
     }
-    set({ token: null, client: null, call: null, callId: null, error: null });
   }
+
+  set({ 
+    token: null, 
+    client: null, 
+    call: null, 
+    callId: null, 
+    error: null,
+    incomingCall: null 
+  });
+},
 }));
 
 export default useCallStore;
