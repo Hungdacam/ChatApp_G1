@@ -18,6 +18,8 @@ import { useFriendStore } from "./store/useFriendStore";
 import FriendRequestsPage from "./pages/FriendRequestsPage";
 import CallPage from "./pages/CallPage";
 import IncomingCallNotification from "./components/IncomingCallNotification";
+import FriendListPage from './pages/FriendListPage';
+import ContactsPage from "./pages/ContactsPage";
 
 const App = () => {
   const { authUser } = useAuthStore(); // Không cần setOnlineUsers từ useAuthStore nữa
@@ -83,6 +85,7 @@ const App = () => {
             !authUser ? <ForgotPasswordPage /> : <Navigate to="/login" replace />
           }
         />
+        <Route path="/friends" element={<FriendListPage />} />
         <Route
           path="/"
           element={
@@ -93,6 +96,7 @@ const App = () => {
             )
           }
         />
+        <Route path="/contacts" element={authUser ? <ContactsPage /> : <Navigate to="/login" />} />
         <Route
           path="/settings"
           element={authUser ? <SettingsPage /> : <Navigate to="/login" replace />}

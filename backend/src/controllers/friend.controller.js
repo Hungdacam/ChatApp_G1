@@ -60,6 +60,15 @@ exports.cancelFriendRequest = async (req, res) => {
       return res.status(404).json({ message: 'Không tìm thấy lời mời để hủy' });
     }
 
+    // Gửi thông báo realtime
+    const io = req.app.get('io');
+    const onlineUsers = req.app.get('onlineUsers');
+    const receiverSocketId = onlineUsers.get(receiverId.toString());
+    if (receiverSocketId) {
+      io.to(receiverSocketId).emit('friend-request-canceled', { senderId });
+    }
+
+
     res.status(200).json({ message: 'Đã hủy lời mời kết bạn' });
   } catch (error) {
     console.error('Lỗi hủy lời mời:', error.message);
@@ -238,7 +247,7 @@ exports.rejectFriendRequest = async (req, res) => {
 };
 exports.unfriend = async (req, res) => {
   const userId1 = req.user._id;
-  const { friendId: userId2  } = req.body;
+  const { friendId: userId2 } = req.body;
 
   try {
 

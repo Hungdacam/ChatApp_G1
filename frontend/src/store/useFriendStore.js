@@ -42,6 +42,12 @@ export const useFriendStore = create((set, get) => {
           get().fetchSentRequests(); // Cập nhật danh sách lời mời đã gửi
         }
       });
+      // Thêm listener cho sự kiện friend-request-canceled
+      socket.off("friend-request-canceled");
+      socket.on("friend-request-canceled", ({ senderId }) => {
+        // Khi người gửi hủy lời mời, cập nhật lại danh sách lời mời nhận được
+        get().fetchReceivedRequests();
+      });
     };
 
     registerFriendRequestListener();
@@ -108,6 +114,7 @@ export const useFriendStore = create((set, get) => {
         const res = await axios.post("/friends/accept-request", { senderId }, { withCredentials: true });
         toast.success("Đã chấp nhận lời mời kết bạn");
         get().fetchReceivedRequests();
+        get().fetchFriends(); // 🔥 Dòng này bị thiếu
         useChatStore.getState().refreshChatList();
         return res.data.chatId;
       } catch (err) {
@@ -143,21 +150,35 @@ export const useFriendStore = create((set, get) => {
       
       // Kiểm tra xem đã là bạn bè chưa
       if (friends.some(friend => friend._id === targetId)) {
+        console.log("accepted");
         return 'accepted';
       }
       
       // Kiểm tra xem đã gửi lời mời chưa
       if (sentRequests.some(req => req.userId2._id === targetId)) {
+        console.log("pending");
         return 'pending';
       }
       
       // Kiểm tra xem đã nhận lời mời chưa
       if (receivedRequests.some(req => req.userId1._id === targetId)) {
+        console.log("received");
         return 'received';
       }
       
       return 'none';
     } ,
+    unfriend: async (friendId) => {
+      try {
+        await axios.post("/friends/unfriend", { friendId }, { withCredentials: true });
+        toast.success("Đã hủy kết bạn thành công");
+        get().fetchFriends();
+        useChatStore.getState().refreshChatList?.();
+      } catch (err) {
+        console.error("❌ Error unfriending:", err);
+        toast.error("Không thể hủy kết bạn");
+      }
+    },
     setupSocketListeners,
   };
 });

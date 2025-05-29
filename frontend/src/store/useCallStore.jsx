@@ -16,7 +16,8 @@ const useCallStore = create((set, get) => ({
   error: null,
   callHistory: [],
   incomingCall: null,
-  
+  isInCall: false,
+  busyNotification: null,
   // Lấy token Stream từ server
   fetchToken: async () => {
     set({ isLoading: true });
@@ -58,8 +59,21 @@ const useCallStore = create((set, get) => ({
       return null;
     }
   },
-  
-// 
+  // Set trạng thái đang trong cuộc gọi
+    setInCallStatus: (status) => {
+      set({ isInCall: status });
+    },
+    
+    // Set thông báo busy
+    setBusyNotification: (notification) => {
+      set({ busyNotification: notification });
+    },
+    
+    // Clear thông báo busy
+    clearBusyNotification: () => {
+      set({ busyNotification: null });
+    },
+
 createGroupCall: async (chatId, callType = 'video') => {
   set({ isLoading: true });
   try {
@@ -139,7 +153,7 @@ createGroupCall: async (chatId, callType = 'video') => {
   // Tham gia cuộc gọi
   joinCall: async (callId) => {
   const { client } = get();
-  set({ isLoading: true });
+  set({ isLoading: true , isInCall: true});
   
   let retryCount = 0;
   const maxRetries = 2;
@@ -153,7 +167,13 @@ createGroupCall: async (chatId, callType = 'video') => {
       const call = client.call('default', callId);
       await call.join({ create: true });
       
-      set({ call, callId, isLoading: false });
+      set({ 
+        call, 
+        callId, 
+        isLoading: false,
+        isInCall: true,
+        incomingCall: null
+      });
       return call;
     } catch (error) {
       if (retryCount < maxRetries) {
@@ -164,7 +184,11 @@ createGroupCall: async (chatId, callType = 'video') => {
       }
       
       console.error('Error joining call after retries:', error);
-      set({ error: 'Không thể tham gia cuộc gọi', isLoading: false });
+      set({ 
+        error: 'Không thể tham gia cuộc gọi', 
+        isLoading: false,
+        isInCall: false 
+      });
       toast.error('Không thể tham gia cuộc gọi sau nhiều lần thử');
       return null;
     }
@@ -234,20 +258,55 @@ endCall: async () => {
         }
         
         // ✅ Reset state cuối cùng
-        set({ call: null, callId: null });
+        set({ call: null, callId: null,isInCall: false,
+        busyNotification: null });
         
     } catch (error) {
         console.error('Error ending call:', error);
         // Vẫn reset state dù có lỗi
-        set({ call: null, callId: null });
+        set({ call: null, callId: null, isInCall: false,
+        busyNotification: null });
     }
 },
-
-
-
-
-
-
+handleBusyCall: async (callId) => {
+    console.log("🔚 Xử lý cuộc gọi bị busy:", callId);
+    
+    const { call, callId: currentCallId } = get();
+    
+    // Chỉ xử lý nếu callId khớp
+    if (currentCallId === callId) {
+      try {
+        // Leave call nếu đang active
+        if (call) {
+          const callingState = call.state.callingState;
+          if (callingState !== 'left' && callingState !== 'idle') {
+            await call.leave();
+          }
+        }
+        
+        // Reset state
+        set({ 
+          call: null, 
+          callId: null,
+          isInCall: false,
+          incomingCall: null,
+          error: null
+        });
+        
+        console.log("✅ Đã reset state sau khi cuộc gọi bị busy");
+        
+      } catch (error) {
+        console.error("Lỗi khi xử lý busy call:", error);
+        // Vẫn reset state dù có lỗi
+        set({ 
+          call: null, 
+          callId: null,
+          isInCall: false,
+          incomingCall: null
+        });
+      }
+    }
+  },
 // Xử lý khi người dùng từ chối cuộc gọi
 rejectIncomingCall: async () => {
   const { incomingCall } = get();

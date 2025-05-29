@@ -4,7 +4,7 @@ import useAuthStore from "../store/useAuthStore";
 import useCallStore from "../store/useCallStore";
 import PageLoader from "../components/PageLoader";
 import toast from "react-hot-toast";
-
+import BusyNotification from "../components/BusyNotification"; // 
 import {
   StreamVideo,
   StreamCall,
@@ -33,6 +33,7 @@ const CallPage = () => {
     fetchToken,
     initClient,
     joinCall,
+    busyNotification,
   } = useCallStore();
 
   useEffect(() => {
@@ -130,6 +131,34 @@ useEffect(() => {
     window.removeEventListener('callEndedFromSocket', handleCallEndedFromSocket);
   };
 }, [navigate]);
+// Trong CallPage.jsx - thêm useEffect để xử lý busy call
+useEffect(() => {
+  const handleBusyCall = (event) => {
+    console.log("📞 Nhận event busy call:", event.detail);
+    const { callId } = event.detail;
+    
+    // Sử dụng callStore để xử lý
+    const callStore = useCallStore.getState();
+    callStore.handleBusyCall(callId);
+    
+    // Chuyển về trang chủ sau delay
+    setTimeout(() => {
+      navigate('/', {
+        replace: true,
+        state: {
+          preserveAuth: true,
+          fromBusyCall: true
+        }
+      });
+    }, 2000);
+  };
+
+  window.addEventListener('busyCallReceived', handleBusyCall);
+  
+  return () => {
+    window.removeEventListener('busyCallReceived', handleBusyCall);
+  };
+}, [navigate]);
 
 
  // Tạo biến isLoading từ các trạng thái loading khác nhau
@@ -159,6 +188,7 @@ return (
           <CallContent />
         </StreamCall>
       </StreamVideo>
+      <BusyNotification/>
     </div>
   </div>
 );

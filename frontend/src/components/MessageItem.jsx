@@ -1,14 +1,47 @@
 import React, { memo, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
-import { Paperclip, MoreVertical, Reply, Copy, Trash2, Forward } from 'lucide-react';
+import { Paperclip, MoreVertical, Copy, Trash2, Forward, Pin, PinOff } from 'lucide-react';
 import { useMemo } from 'react';
 import ForwardMessageModal from './ForwardMessageModal';
 import toast from 'react-hot-toast';
+import { useChatStore } from '../store/useChatStore';
 
 const MessageItem = memo(({ message, currentUserId, isGroupChat }) => {
   const [showActions, setShowActions] = useState(false);
   const [showForwardModal, setShowForwardModal] = useState(false);
+  const [tempPinned, setTempPinned] = useState(false);
+  const { pinMessage, unpinMessage, pinnedMessages, selectedChat, fetchPinnedMessages } = useChatStore();
+
+   const isPinned = useMemo(() => {
+    const inPinnedList = Array.isArray(pinnedMessages) ? pinnedMessages.some(msg => msg.messageId === message.messageId) : false;
+    return inPinnedList || message.isPinned || tempPinned;
+}, [pinnedMessages, message.messageId, message.isPinned, tempPinned]);
+
+    const handlePinMessage = async () => {
+        try {
+            setShowActions(false);
+            setTempPinned(true); // Cập nhật trạng thái tạm thời ngay lập tức
+            await pinMessage(message.messageId);
+         
+        } catch (error) {
+            setTempPinned(false); // Hoàn nguyên nếu có lỗi
+            toast.error("Không thể ghim tin nhắn");
+        }
+    };
+
+    const handleUnpinMessage = async () => {
+        try {
+            setShowActions(false);
+            setTempPinned(false); // Cập nhật trạng thái tạm thời
+            await unpinMessage(message.messageId);
+            if (selectedChat?.chatId) {
+        await fetchPinnedMessages(selectedChat.chatId);
+      }
+        } catch (error) {
+            toast.error("Không thể bỏ ghim tin nhắn");
+        }
+    };
 
   const handleCopyMessage = () => {
     navigator.clipboard.writeText(message.content);
@@ -23,14 +56,11 @@ const MessageItem = memo(({ message, currentUserId, isGroupChat }) => {
   
   const isSentByMe = useMemo(() => {
     if (!message.senderId || !currentUserId) return false;
-    console.log(message.senderId);
-    console.log(currentUserId);
-    // Trường hợp senderId là một đối tượng có thuộc tính _id
+    
     if (typeof message.senderId === 'object' && message.senderId._id) {
       return message.senderId._id === currentUserId;
     }
     
-    // Trường hợp senderId là một chuỗi ID
     if (typeof message.senderId === 'string') {
       return message.senderId === currentUserId;
     }
@@ -54,7 +84,7 @@ const MessageItem = memo(({ message, currentUserId, isGroupChat }) => {
     if (message.isError) return "Lỗi gửi tin nhắn";
     if (message.isRecalled) return "Đã thu hồi";
     if (!message.content && !message.image && !message.video && !message.fileUrl && !message.fileName) {
-      return "đang tải nội dung"; // Placeholder nếu tin nhắn rỗng
+      return "đang tải nội dung";
     }
     return null;
   };
@@ -116,7 +146,10 @@ const MessageItem = memo(({ message, currentUserId, isGroupChat }) => {
   };
 
   return (
-    <div className={`flex mb-4 ${isSentByMe ? 'justify-end' : 'justify-start'} group relative`}>
+    <div 
+      id={`msg-${message.messageId}`}
+      className={`flex mb-4 ${isSentByMe ? 'justify-end' : 'justify-start'} group relative`}
+    >
       {!isSentByMe && (
         <img
           src={typeof message.senderId === 'object' ? message.senderId.avatar || '/default-avatar.png' : '/default-avatar.png'}
@@ -131,18 +164,26 @@ const MessageItem = memo(({ message, currentUserId, isGroupChat }) => {
             ? 'bg-blue-500 text-white'
             : 'bg-gray-100 text-gray-800'
         }`}>
-          {/* Chỉ hiển thị tên người gửi trong chat nhóm và không phải tin nhắn của mình */}
           {!isSentByMe && isGroupChat && (
             <div className="text-xs font-medium mb-1 text-gray-600">
               {typeof message.senderId === 'object' ? message.senderId.name || "User" : "User"}
             </div>
           )}
           
-          {/* Hiển thị label "Đã chuyển tiếp" nếu là tin nhắn được chuyển tiếp */}
           {message.isForwarded && (
             <div className="text-xs opacity-75 mb-1 flex items-center gap-1">
               <Forward size={12} />
               Đã chuyển tiếp
+            </div>
+          )}
+
+          {message.isPinned && (
+            <div className="text-xs opacity-75 mb-1 flex items-center gap-1">
+              <Pin size={12} />
+              <span>Đã ghim</span>
+              {message.pinnedBy && (
+                <span className="text-xs">bởi {message.pinnedBy.name}</span>
+              )}
             </div>
           )}
 
@@ -159,7 +200,6 @@ const MessageItem = memo(({ message, currentUserId, isGroupChat }) => {
           <p className="text-xs text-right mt-1 opacity-70">{formattedTime}</p>
         </div>
 
-        {/* Menu actions */}
         <div className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
             onClick={() => setShowActions(!showActions)}
@@ -170,6 +210,23 @@ const MessageItem = memo(({ message, currentUserId, isGroupChat }) => {
           
           {showActions && (
             <div className="absolute right-0 top-8 bg-white border rounded-lg shadow-lg py-1 z-10">
+              {!isPinned ? (
+                <button
+                  onClick={handlePinMessage}
+                  className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 w-full text-left"
+                >
+                  <Pin size={16} />
+                  Ghim
+                </button>
+              ) : (
+                <button
+                  onClick={handleUnpinMessage}
+                  className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 w-full text-left"
+                >
+                  <PinOff size={16} />
+                  Bỏ ghim
+                </button>
+              )}
               <button
                 onClick={handleForwardMessage}
                 className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 w-full text-left"
@@ -198,7 +255,6 @@ const MessageItem = memo(({ message, currentUserId, isGroupChat }) => {
         </div>
       </div>
 
-      {/* Forward Modal */}
       <ForwardMessageModal
         isOpen={showForwardModal}
         onClose={() => setShowForwardModal(false)}

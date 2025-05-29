@@ -7,6 +7,8 @@ import { useFriendStore } from "../store/useFriendStore";
 
 const AddFriendPage = () => {
   const location = useLocation();
+  const { unfriend } = useFriendStore();
+   const [showMenu, setShowMenu] = useState(false);
   const navigate = useNavigate();
   const { authUser } = useAuthStore();
   const { 
@@ -59,14 +61,38 @@ const AddFriendPage = () => {
       setIsLoading(false);
     }
   };
+  // Hàm xử lý hủy kết bạn
+  // Hàm xử lý hủy kết bạn được cải thiện
+const handleUnfriend = async () => {
+  setShowMenu(false);
+  setIsLoading(true);
+  
+  try {
+    await unfriend(friend._id); // Sử dụng friend._id thay vì otherUser._id
+    
+    // Cập nhật trạng thái local ngay lập tức
+    setFriendshipStatus('none');
+    
+    // Refresh dữ liệu để đảm bảo đồng bộ
+    await fetchFriends();
+    await fetchSentRequests();
+    
+    toast.success("Đã hủy kết bạn thành công");
+  } catch (error) {
+    console.error("Lỗi khi hủy kết bạn:", error);
+    toast.error("Không thể hủy kết bạn");
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   const handleStartChat = () => {
-    navigate("/chat", { state: { friend } });
+    navigate("/", { state: { friend } });
   };
 
   // Render button dựa vào trạng thái friendship
   const renderActionButton = () => {
-    if (friendshipStatus === 'friend') {
+    if (friendshipStatus === 'accepted') {
       return (
         <div className="flex gap-3">
           <button 
@@ -76,10 +102,10 @@ const AddFriendPage = () => {
             Đã kết bạn
           </button>
           <button 
-            onClick={handleStartChat}
+            onClick={handleUnfriend}
             className="bg-blue-500 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2"
           >
-            <MessageCircle size={18} /> Nhắn tin
+            Hủy kết bạn
           </button>
         </div>
       );

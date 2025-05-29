@@ -646,7 +646,36 @@ socket.on("forward_error", (data) => {
  socket.on("incoming_call", (data) => {
   console.log("🔔 Cuộc gọi đến:", data);
   const { callId, caller } = data;
-  
+  const callStore = useCallStore.getState();
+  const { isInCall } = callStore;
+  if (isInCall) {
+    console.log("📞 Đang trong cuộc gọi, từ chối và thông báo busy");
+    
+    // Thông báo cho người nhận rằng có người đang gọi
+    callStore.setBusyNotification({
+      caller: caller,
+      timestamp: new Date(),
+      callId: callId
+    });
+    
+    // Hiển thị toast notification cho người nhận
+    toast(`${caller.name} đang gọi cho bạn`, {
+      duration: 4000,
+      icon: '📞',
+      style: {
+        background: '#3B82F6',
+        color: 'white',
+      }
+    });
+    
+    // Gửi busy signal về cho người gọi
+    socket.emit("call_busy", {
+      callId,
+      callerId: caller._id,
+      receiverName: data.receiver?.name || "Người nhận"
+    });
+    
+  } else {
   // Hiển thị thông báo cuộc gọi đến
   try {
     const callStore = useCallStore.getState();
@@ -659,6 +688,38 @@ socket.on("forward_error", (data) => {
     console.log("CallStore state sau khi set:", useCallStore.getState());
   } catch (error) {
     console.error("Lỗi khi xử lý cuộc gọi đến:", error);
+  }
+}
+});
+// Thêm xử lý khi nhận được thông báo busy
+socket.on("call_busy_response", (data) => {
+  console.log("📞 Nhận thông báo busy:", data);
+  const { receiverName, message, callId } = data;
+  
+  // Hiển thị thông báo cho người gọi
+  toast.error(`${receiverName} đang bận`, {
+    duration: 5000,
+    icon: '📞',
+    style: {
+      background: '#EF4444',
+      color: 'white',
+    }
+  });
+  
+  // Xử lý cuộc gọi bị busy
+  const callStore = useCallStore.getState();
+  callStore.handleBusyCall(callId);
+  
+  // Dispatch event cho CallPage nếu đang ở đó
+  if (window.location.pathname.includes('/call/')) {
+    const event = new CustomEvent('busyCallReceived', {
+      detail: {
+        callId,
+        receiverName,
+        message
+      }
+    });
+    window.dispatchEvent(event);
   }
 });
 
@@ -801,6 +862,51 @@ socket.on("incoming_group_call", (data) => {
   }
 });
 
+socket.on("message_pinned", (data) => {
+    console.log("📌 NHẬN ĐƯỢC message_pinned:", data);
+    const { messageId, chatId, pinnedMessage, pinnedBy } = data;
+    const chatStore = useChatStore.getState();
+    const { selectedChat } = chatStore;
+
+    if (selectedChat && selectedChat.chatId === chatId) {
+        // **CHỈ gọi fetchPinnedMessages để đồng bộ từ server**
+        chatStore.fetchPinnedMessages(chatId);
+        console.log("✅ Đã fetch lại pinnedMessages cho chatId:", chatId);
+    }
+
+    // Hiển thị thông báo
+    const pinnerName = pinnedBy?.name || "Ai đó";
+    toast.success(`${pinnerName} đã ghim tin nhắn`, {
+        icon: '📌',
+        duration: 3000,
+    });
+});
+
+socket.on("message_unpinned", (data) => {
+    console.log("📌 NHẬN ĐƯỢC message_unpinned:", data);
+    const { messageId, chatId, unpinnedBy } = data;
+    const chatStore = useChatStore.getState();
+    const { selectedChat } = chatStore;
+
+    // **QUAN TRỌNG: Chỉ xử lý nếu đang ở đúng chat**
+    if (selectedChat && selectedChat.chatId === chatId) {
+        // Gọi fetchPinnedMessages TRƯỚC
+        chatStore.fetchPinnedMessages(chatId).then(() => {
+            console.log("✅ Đã fetch lại pinnedMessages cho chatId:", chatId);
+            
+            // Sau đó mới cập nhật trạng thái local
+            chatStore.updatePinnedMessages(messageId, 'unpin');
+            chatStore.updateMessagePinStatus(messageId, false, null);
+        });
+    }
+
+    // Hiển thị thông báo
+    const unpinnerName = unpinnedBy?.name || "Ai đó";
+    toast.success(`${unpinnerName} đã bỏ ghim tin nhắn`, {
+        icon: '📌',
+        duration: 3000,
+    });
+});
   set({ socket });
     return socket;
   },

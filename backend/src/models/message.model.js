@@ -13,6 +13,9 @@ const messageSchema = new mongoose.Schema({
   isRead: { type: Boolean, default: false },
   isRecalled: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },
+  isPinned: { type: Boolean, default: false },
+  pinnedAt: { type: Date },
+  pinnedBy: { type: mongoose.Schema.Types.ObjectId, ref: "user" }
 });
 
 module.exports = mongoose.model('Message', messageSchema);

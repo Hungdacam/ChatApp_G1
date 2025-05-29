@@ -9,6 +9,7 @@ export const useChatStore = create((set, get) => ({
   isMessagesLoading: false,
   error: null,
   hasAttemptedInitialFetch: false,
+  pinnedMessages: [],
   // Thêm các state mới cho chat nhóm
   isCreatingGroup: false,
   isAddingMember: false,
@@ -928,5 +929,139 @@ export const useChatStore = create((set, get) => ({
       throw error;
     }
   },
-  
+  selectChat: (chat) => {
+    if (!chat || !chat.chatId) {
+        console.error("Không thể chọn chat không hợp lệ:", chat);
+        return;
+    }
+
+    const { selectedChat } = get();
+    
+    // Leave phòng chat cũ nếu có
+    if (selectedChat?.chatId && window.socketInstance) {
+        window.socketInstance.emit("leave_chat", selectedChat.chatId);
+        console.log("Left chat room:", selectedChat.chatId);
+    }
+
+    const { chats } = get();
+    const validChats = chats.filter(c => c !== undefined && c !== null);
+    const fullChat = validChats.find(c => c.chatId === chat.chatId) || chat;
+
+    // Set selectedChat trước để UI phản hồi nhanh
+    set({ selectedChat: fullChat });
+
+    // **QUAN TRỌNG: Join phòng chat TRƯỚC khi fetch dữ liệu**
+    if (window.socketInstance) {
+        window.socketInstance.emit("join_chat", chat.chatId);
+        console.log("✅ Emitted join_chat for:", chat.chatId);
+        
+        // Đợi một chút để đảm bảo đã join thành công
+        setTimeout(() => {
+            // Fetch dữ liệu sau khi đã join phòng
+            get().fetchPinnedMessages(chat.chatId);
+        }, 100);
+    }
+
+    // Fetch thông tin chat đầy đủ từ server
+    axios.get(`/chat/${chat.chatId}`)
+        .then(response => {
+            if (response.data && response.data.chat) {
+                set({ selectedChat: response.data.chat });
+            } else {
+                set({ selectedChat: fullChat });
+            }
+        })
+        .catch((error) => {
+            console.error("Lỗi khi fetch chat info:", error);
+            set({ selectedChat: fullChat });
+        });
+},
+
+// Thêm hàm pinMessage
+pinMessage: async (messageId) => {
+    console.log("Đang ghim messageId:", messageId);
+    if (!messageId) {
+        throw new Error("messageId không được để trống");
+    }
+    try {
+        const response = await axios.post('/chat/pin', { messageId });
+        console.log("Kết quả ghim:", response.data);
+        // Làm mới danh sách tin nhắn ghim ngay sau khi ghim thành công
+        const { selectedChat } = get();
+        if (selectedChat && selectedChat.chatId) {
+            await get().fetchPinnedMessages(selectedChat.chatId);
+        }
+        return response.data;
+    } catch (error) {
+        console.error("Lỗi khi ghim tin nhắn:", error.response?.data || error.message);
+        throw error;
+    }
+},
+
+// Thêm hàm unpinMessage
+unpinMessage: async (messageId) => {
+    console.log("Đang bỏ ghim messageId:", messageId);
+    if (!messageId) {
+        throw new Error("messageId không được để trống");
+    }
+    try {
+        const response = await axios.post('/chat/unpin', { messageId });
+        console.log("Kết quả bỏ ghim:", response.data);
+        // Làm mới danh sách tin nhắn ghim ngay sau khi bỏ ghim thành công
+        const { selectedChat } = get();
+        if (selectedChat && selectedChat.chatId) {
+            await get().fetchPinnedMessages(selectedChat.chatId);
+        }
+        return response.data;
+    } catch (error) {
+        console.error("Lỗi khi bỏ ghim tin nhắn:", error.response?.data || error.message);
+        throw error;
+    }
+},
+
+
+updateMessagePinStatus: (messageId, isPinned, pinnedBy) => {
+  const { messages } = get();
+  
+  const updatedMessages = messages.map(msg => {
+    if (msg.messageId === messageId) {
+      return {
+        ...msg,
+        isPinned: isPinned,
+        pinnedBy: pinnedBy,
+        pinnedAt: isPinned ? new Date() : null
+      };
+    }
+    return msg;
+  });
+  
+  set({ messages: updatedMessages });
+},
+
+updatePinnedMessages: (messageId, action, pinnedMessage = null) => {
+  const { pinnedMessages } = get();
+  
+  if (action === 'pin' && pinnedMessage) {
+    // Thêm tin nhắn vào danh sách ghim nếu chưa có
+    const exists = pinnedMessages.find(msg => msg.messageId === messageId);
+    if (!exists) {
+      set({ pinnedMessages: [...pinnedMessages, pinnedMessage] });
+    }
+  } else if (action === 'unpin') {
+    // Xóa tin nhắn khỏi danh sách ghim
+    const updatedPinnedMessages = pinnedMessages.filter(msg => msg.messageId !== messageId);
+    set({ pinnedMessages: updatedPinnedMessages });
+  }
+},
+  fetchPinnedMessages: async (chatId) => {
+  try {
+    console.log("Đang fetch pinnedMessages cho chatId:", chatId);
+    const res = await axios.get(`/chat/${chatId}/pinned`);
+    console.log("Kết quả fetch pinnedMessages:", res.data);
+    set({ pinnedMessages: res.data.pinnedMessages });
+  } catch (error) {
+    console.error("Lỗi khi fetch pinnedMessages:", error);
+    set({ pinnedMessages: [] });
+  }
+},
 }));
