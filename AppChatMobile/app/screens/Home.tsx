@@ -17,7 +17,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import socket from "../config/socket";
 import { BASE_URL } from "../config/config";
-
+import { Alert } from "react-native";
 export default function Home() {
   const [search, setSearch] = useState("");
   const [chats, setChats] = useState([]);
@@ -32,13 +32,16 @@ export default function Home() {
       socket.on("new_group_created", fetchChats);
       socket.on("group_dissolved", fetchChats);
       socket.on("group_avatar_updated", fetchChats);
-      socket.on("left_group", fetchChats); 
+      socket.on("left_group", fetchChats);
+      socket.on("group_member_added", fetchChats); 
+
       return () => {
         socket.off("new_message", fetchChats);
         socket.off("new_group_created", fetchChats);
         socket.off("group_dissolved", fetchChats);
         socket.off("group_avatar_updated", fetchChats);
         socket.off("left_group", fetchChats);
+        socket.off("group_member_added", fetchChats); 
       };
     }, [])
   );

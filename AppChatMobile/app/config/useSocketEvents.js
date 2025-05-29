@@ -178,6 +178,18 @@ export const useSocketEvents = (currentUserId) => {
         console.error('Lỗi khi nhận friend-request-canceled:', error);
       }
     });
+    socket.on('added_to_group', (data) => {
+      try {
+        console.log("Bạn vừa được thêm vào nhóm:", data);
+        Alert.alert(
+          "🎉 Bạn đã được thêm vào nhóm",
+          `Bạn đã được thêm vào nhóm "${data.groupName || "Không tên"}"`
+        );
+        // Có thể gọi fetchChats hoặc điều hướng nếu muốn
+      } catch (error) {
+        console.error('Lỗi hiển thị thông báo được thêm vào nhóm:', error);
+      }
+    });
     // Cleanup khi component unmount
     return () => {
       socket.off('new_friend_request');
@@ -193,7 +205,7 @@ export const useSocketEvents = (currentUserId) => {
       socket.off('member_left_group');
       socket.off('left_group');
        socket.off('friend-request-canceled');
-
+       socket.off('added_to_group');
     };
   }, [navigation, currentUserId]);
 };

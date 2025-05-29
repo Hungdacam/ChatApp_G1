@@ -14,7 +14,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import * as ImagePicker from 'expo-image-picker';
 import { BASE_URL } from "../config/config";
-import styles from '../style/EditProfileStyle'; 
+import styles from '../style/EditProfileStyle';
+import DateTimePicker from '@react-native-community/datetimepicker'; 
 const EditProfileScreen = ({ route, navigation }) => {
   const { userInfo } = route.params;
 
@@ -24,6 +25,49 @@ const EditProfileScreen = ({ route, navigation }) => {
   const [email, setEmail] = useState('');
   const [gender, setGender] = useState('');
   const [avatar, setAvatar] = useState(null);
+const [showDatePicker, setShowDatePicker] = useState(false);
+const [nameError, setNameError] = useState('');
+const [dobError, setDobError] = useState('');
+const [genderError, setGenderError] = useState('');
+  const validate = () => {
+  let valid = true;
+  setNameError('');
+  setDobError('');
+  setGenderError('');
+
+  if (!name.trim()) {
+    setNameError('Vui lòng nhập họ và tên.');
+    valid = false;
+  } else if (!/^[a-zA-ZÀ-ỹ\s]+$/.test(name.trim())) {
+    setNameError('Tên chỉ được nhập chữ, không chứa số hoặc ký tự đặc biệt.');
+    valid = false;
+  }
+
+  if (!dob.trim()) {
+    setDobError('Vui lòng chọn ngày sinh.');
+    valid = false;
+  } else if (!dob.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+    setDobError('Ngày sinh không hợp lệ.');
+    valid = false;
+  } else {
+    // Kiểm tra tuổi phải >= 15
+    const [day, month, year] = dob.split('/');
+    const dobDate = new Date(`${year}-${month}-${day}`);
+    const now = new Date();
+    const minDate = new Date(now.getFullYear() - 15, now.getMonth(), now.getDate());
+    if (dobDate > minDate) {
+      setDobError('Bạn phải từ 15 tuổi trở lên.');
+      valid = false;
+    }
+  }
+
+  if (!gender.trim()) {
+    setGenderError('Vui lòng chọn giới tính.');
+    valid = false;
+  }
+
+  return valid;
+};
 
   const formatDateToDDMMYYYY = (isoDate) => {
     if (!isoDate) return '';
@@ -97,6 +141,7 @@ const EditProfileScreen = ({ route, navigation }) => {
 
   // Hàm cập nhật hồ sơ
   const handleUpdateProfile = async () => {
+    if (!validate()) return;
     const formattedDob = formatDateToYYYYMMDD(dob);
     const updatedData = { name, phone, dob: formattedDob, gender };
   
@@ -167,6 +212,7 @@ const EditProfileScreen = ({ route, navigation }) => {
           value={name}
           onChangeText={setName}
         />
+        {nameError ? <Text style={styles.errorText}>{nameError}</Text> : null}
 
         <Text style={styles.label}>Số điện thoại</Text>
         <TextInput
@@ -176,15 +222,29 @@ const EditProfileScreen = ({ route, navigation }) => {
         />
 
         <Text style={styles.label}>Ngày sinh</Text>
-        <TextInput
+        <TouchableOpacity
           style={styles.input}
-          placeholder="Nhập ngày sinh (dd/mm/yyyy)"
-          value={dob}
-          onChangeText={(text) => {
-            const formattedText = text.replace(/[^0-9/]/g, '');
-            setDob(formattedText);
-          }}
-        />
+          onPress={() => setShowDatePicker(true)}
+        >
+          <Text>{dob || "Chọn ngày sinh"}</Text>
+        </TouchableOpacity>
+        {showDatePicker && (
+          <DateTimePicker
+            value={dob ? new Date(formatDateToYYYYMMDD(dob)) : new Date()}
+            mode="date"
+            display="default"
+            onChange={(event, selectedDate) => {
+              setShowDatePicker(false);
+              if (selectedDate) {
+                const day = String(selectedDate.getDate()).padStart(2, '0');
+                const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+                const year = selectedDate.getFullYear();
+                setDob(`${day}/${month}/${year}`);
+              }
+            }}
+          />
+        )}
+        {dobError ? <Text style={styles.errorText}>{dobError}</Text> : null}
 
 {/* <Text style={styles.label}>Email</Text>
 <Text style={[styles.input, { paddingVertical: 12, color: '#555' }]}>
@@ -205,6 +265,7 @@ const EditProfileScreen = ({ route, navigation }) => {
             </TouchableOpacity>
           ))}
         </View>
+        {genderError ? <Text style={styles.errorText}>{genderError}</Text> : null}
 
         <TouchableOpacity style={styles.button} onPress={handleUpdateProfile}>
           <Text style={styles.buttonText}>Cập nhật thông tin</Text>

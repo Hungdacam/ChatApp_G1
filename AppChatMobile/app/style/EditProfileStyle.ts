@@ -92,4 +92,16 @@ export default StyleSheet.create({
     alignSelf: 'center',
     marginBottom: 20,
   },
+ 
+errorText: {
+  color: '#e53935',
+  fontSize: 13,
+  marginBottom: 8,
+  marginLeft: 32,
+  marginTop: -10,
+  fontStyle: 'italic',
+  fontWeight: '500',
+  textAlign: 'left',
+},
+
 });

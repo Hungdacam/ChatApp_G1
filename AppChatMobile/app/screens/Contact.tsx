@@ -251,6 +251,26 @@ useEffect(() => {
   };
 }, [selectedTab]);
 
+useEffect(() => {
+  const handler = (data) => {
+    // Cập nhật lại trạng thái bạn bè trong danh bạ
+    setContacts((prev) =>
+      prev.map((contact) =>
+        contact._id === data.receiver._id
+          ? { ...contact, friendStatus: "friends", isSender: false }
+          : contact
+      )
+    );
+    fetchFriends(); // cập nhật lại danh sách bạn bè
+    if (selectedTab === "requests") fetchFriendRequests();
+    //Alert.alert("Thông báo", "Lời mời kết bạn đã được chấp nhận.");
+  };
+  socket.on("friend_request_accepted", handler);
+  return () => {
+    socket.off("friend_request_accepted", handler);
+  };
+}, [selectedTab]);
+
   const fetchFriendRequests = async () => {
     try {
       setIsLoading(true);
@@ -521,12 +541,7 @@ useEffect(() => {
       style={styles.requestItem}
       onPress={() => {
         navigation.navigate("UserProfile", {
-          user: {
-            id: item._id,
-            name: item.name,
-            phone: item.phone,
-            avatar: item.avatar,
-          },
+          userId: item._id,
         });
       }}
     >
@@ -600,6 +615,7 @@ useEffect(() => {
                     name: item.name || item.contactName,
                     phone: item.phone,
                     avatar: item.avatar,
+                    dob: item.dob
                   },
                 })
               }
