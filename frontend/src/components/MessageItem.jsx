@@ -54,6 +54,56 @@ const MessageItem = memo(({ message, currentUserId, isGroupChat }) => {
     setShowActions(false);
   };
   
+const ImageWithFallback = ({ src, alt, className }) => {
+  const [imageError, setImageError] = useState(false);
+  const [fallbackError, setFallbackError] = useState(false);
+
+  const handleError = (e) => {
+    console.error("Lỗi khi tải ảnh:", src); // Log URL lỗi
+    
+    if (!imageError) {
+      // Lần đầu lỗi: thử ảnh fallback
+      setImageError(true);
+      e.target.src = "/images/image-error.png";
+    } else if (!fallbackError) {
+      // Ảnh fallback cũng lỗi: hiển thị placeholder
+      setFallbackError(true);
+      e.target.style.display = 'none';
+    }
+  };
+
+  // Reset khi src thay đổi
+  React.useEffect(() => {
+    setImageError(false);
+    setFallbackError(false);
+  }, [src]);
+
+  if (fallbackError || !src) {
+    return (
+      <div className="flex items-center justify-center bg-gray-100 rounded-md p-8 max-w-[250px] max-h-[250px]">
+        <div className="text-center">
+          <div className="text-gray-400 mb-2">📷</div>
+          <span className="text-gray-500 text-sm">Ảnh không tải được</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className={className}
+      onError={handleError}
+      onLoad={() => {
+        // Reset error states khi ảnh tải thành công
+        setImageError(false);
+        setFallbackError(false);
+      }}
+    />
+  );
+};
+
   const isSentByMe = useMemo(() => {
     if (!message.senderId || !currentUserId) return false;
     
@@ -89,61 +139,83 @@ const MessageItem = memo(({ message, currentUserId, isGroupChat }) => {
     return null;
   };
 
-  const renderMedia = () => {
-    if (message.image) {
-      return (
-        <div className="mb-2">
-          <img 
-            src={message.image} 
-            alt="Hình ảnh" 
-            className="rounded-md max-w-[250px] max-h-[250px] object-contain"
-            onError={(e) => {
-              console.error("Lỗi khi tải ảnh:", e);
-              e.target.src = "/images/image-error.png";
+ const renderMedia = () => {
+  if (message.image) {
+    return (
+      <div className="mb-2">
+        <ImageWithFallback
+          src={message.image}
+          alt="Hình ảnh"
+          className="rounded-md max-w-[250px] max-h-[250px] object-contain"
+        />
+      </div>
+    );
+  }
+
+  if (message.video) {
+    return (
+      <div className="mb-2">
+        <video 
+          src={message.video} 
+          controls 
+          className="rounded-md max-w-[250px] max-h-[250px]"
+          onError={(e) => {
+            console.error("Lỗi khi tải video:", message.video); // Log URL video lỗi
+            
+            // Ẩn video và hiển thị placeholder
+            e.target.style.display = 'none';
+            
+            // Tạo placeholder cho video
+            const placeholder = document.createElement('div');
+            placeholder.className = 'flex items-center justify-center bg-gray-100 rounded-md p-8 max-w-[250px] max-h-[250px]';
+            placeholder.innerHTML = `
+              <div class="text-center">
+                <div class="text-gray-400 mb-2 text-2xl">🎥</div>
+                <span class="text-gray-500 text-sm">Video không tải được</span>
+              </div>
+            `;
+            
+            // Thay thế video bằng placeholder
+            e.target.parentNode.appendChild(placeholder);
+          }}
+          onLoadStart={() => {
+            console.log("Bắt đầu tải video:", message.video);
+          }}
+        />
+      </div>
+    );
+  }
+
+  if (message.fileUrl || message.fileName) {
+    return (
+      <div className="flex items-center gap-2 mb-2 p-2 bg-gray-100 rounded-md">
+        <Paperclip size={16} />
+        <div>
+          <a 
+            href={message.fileUrl} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-sm font-medium text-blue-600 hover:underline"
+            onClick={(e) => {
+              // Kiểm tra URL trước khi mở
+              if (!message.fileUrl || message.fileUrl === '') {
+                e.preventDefault();
+                toast.error('File không tồn tại');
+              }
             }}
-          />
+          >
+            {message.fileName || "Tải xuống tệp"}
+          </a>
+          {message.fileSize && (
+            <p className="text-xs text-gray-500">{formatFileSize(message.fileSize)}</p>
+          )}
         </div>
-      );
-    }
+      </div>
+    );
+  }
 
-    if (message.video) {
-      return (
-        <div className="mb-2">
-          <video 
-            src={message.video} 
-            controls 
-            className="rounded-md max-w-[250px] max-h-[250px]"
-            onError={(e) => {
-              console.error("Lỗi khi tải video:", e);
-            }}
-          />
-        </div>
-      );
-    }
-
-    if (message.fileUrl || message.fileName) {
-      return (
-        <div className="flex items-center gap-2 mb-2 p-2 bg-gray-100 rounded-md">
-          <Paperclip size={16} />
-          <div>
-            <a 
-              href={message.fileUrl} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-sm font-medium text-blue-600 hover:underline"
-            >
-              {message.fileName || "Tải xuống tệp"}
-            </a>
-            {message.fileSize && (
-              <p className="text-xs text-gray-500">{formatFileSize(message.fileSize)}</p>
-            )}
-          </div>
-        </div>
-      );
-    }
-
-    return null;
-  };
+  return null;
+};
 
   return (
     <div 
@@ -186,7 +258,59 @@ const MessageItem = memo(({ message, currentUserId, isGroupChat }) => {
               )}
             </div>
           )}
+{message.isForwarded && (
+  <div className="text-xs opacity-75 mb-1 flex items-center gap-1">
+    <Forward size={12} />
+    <span>Đã chuyển tiếp</span>
+    {message.forwardedFrom && (
+      <span className="text-xs">từ {message.forwardedFrom.name}</span>
+    )}
+  </div>
+)}
 
+{/* QUAN TRỌNG: Hiển thị media được chuyển tiếp */}
+{message.image && (
+  <div className="mb-2">
+    <ImageWithFallback
+      src={message.image}
+      alt="Forwarded image"
+      className="rounded-md max-w-[250px] max-h-[250px] object-contain"
+    />
+  </div>
+)}
+
+{message.video && (
+  <div className="mb-2">
+    <video 
+      src={message.video} 
+      controls 
+      className="rounded-md max-w-[250px] max-h-[250px]"
+      onError={(e) => {
+        console.error("Lỗi khi tải video:", message.video);
+        e.target.style.display = 'none';
+      }}
+    />
+  </div>
+)}
+
+{message.fileUrl && (
+  <div className="flex items-center gap-2 mb-2 p-2 bg-gray-100 rounded-md">
+    <Paperclip size={16} />
+    <div>
+      <a 
+        href={message.fileUrl} 
+        target="_blank" 
+        rel="noopener noreferrer"
+        className="text-sm font-medium text-blue-600 hover:underline"
+      >
+        {message.fileName || "Tải xuống tệp"}
+      </a>
+      {message.fileSize && (
+        <p className="text-xs text-gray-500">{formatFileSize(message.fileSize)}</p>
+      )}
+    </div>
+  </div>
+)}
           {message.content && (
             <p className="break-words">{message.content}</p>
           )}

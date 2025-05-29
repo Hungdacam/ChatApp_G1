@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useChatStore } from '../store/useChatStore';
-import { X, Search, Users, User } from 'lucide-react';
+import { X, Search, Users, User, Image, Video, File } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const ForwardMessageModal = ({ isOpen, onClose, messageToForward }) => {
@@ -8,6 +8,7 @@ const ForwardMessageModal = ({ isOpen, onClose, messageToForward }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedChats, setSelectedChats] = useState([]);
   const [isForwarding, setIsForwarding] = useState(false);
+  const [includeCaption, setIncludeCaption] = useState(true); // Tùy chọn bao gồm caption
 
   const filteredChats = chats.filter(chat => 
     chat.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -29,35 +30,116 @@ const ForwardMessageModal = ({ isOpen, onClose, messageToForward }) => {
     });
   };
 
-  const handleForward = async () => {
-    if (selectedChats.length === 0) {
-      toast.error('Vui lòng chọn ít nhất một cuộc trò chuyện');
-      return;
-    }
+const handleForward = async () => {
+  if (selectedChats.length === 0) {
+    toast.error('Vui lòng chọn ít nhất một cuộc trò chuyện');
+    return;
+  }
 
-    setIsForwarding(true);
-    try {
-      for (const chat of selectedChats) {
-        const forwardedContent = `📩 Tin nhắn được chuyển tiếp:\n\n${messageToForward.content}`;
-        
-        await sendMessage({
-          chatId: chat.chatId,
-          content: forwardedContent,
-          isForwarded: true,
-          originalMessage: messageToForward
-        });
-      }
+  setIsForwarding(true);
+  try {
+    for (const chat of selectedChats) {
+      // Chuẩn bị nội dung chuyển tiếp
+      let forwardContent = "";
       
-      toast.success(`Đã chuyển tiếp tin nhắn đến ${selectedChats.length} cuộc trò chuyện`);
-      onClose();
-      setSelectedChats([]);
-      setSearchTerm('');
-    } catch (error) {
-      console.error('Lỗi khi chuyển tiếp tin nhắn:', error);
-      toast.error('Không thể chuyển tiếp tin nhắn');
-    } finally {
-      setIsForwarding(false);
+      if (includeCaption && messageToForward.content) {
+        forwardContent = messageToForward.content;
+      }
+
+      console.log("Chuyển tiếp đến chat:", chat.chatId);
+      console.log("Message to forward:", messageToForward);
+
+      await sendMessage({
+        chatId: chat.chatId,
+        content: forwardContent,
+        isForwarded: true,
+        originalMessage: messageToForward
+      });
     }
+    
+    toast.success(`Đã chuyển tiếp tin nhắn đến ${selectedChats.length} cuộc trò chuyện`);
+    onClose();
+    setSelectedChats([]);
+    setSearchTerm('');
+  } catch (error) {
+    console.error('Lỗi chi tiết khi chuyển tiếp:', {
+      message: error.message,
+      status: error.response?.status,
+      data: error.response?.data
+    });
+    toast.error('Không thể chuyển tiếp tin nhắn: ' + (error.response?.data?.message || error.message));
+  } finally {
+    setIsForwarding(false);
+  }
+};
+
+
+
+  // Hiển thị preview của tin nhắn sẽ chuyển tiếp
+  const renderMessagePreview = () => {
+    return (
+      <div className="bg-gray-50 p-3 rounded-lg mb-4">
+        <div className="text-sm text-gray-600 mb-2">Tin nhắn sẽ chuyển tiếp:</div>
+        <div className="border-l-4 border-blue-500 pl-3">
+          {/* Hiển thị media */}
+          {messageToForward.image && (
+            <div className="mb-2">
+              <img 
+                src={messageToForward.image} 
+                alt="Preview" 
+                className="w-16 h-16 object-cover rounded"
+              />
+              <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
+                <Image size={12} />
+                <span>Hình ảnh</span>
+              </div>
+            </div>
+          )}
+          
+          {messageToForward.video && (
+            <div className="mb-2">
+              <video 
+                src={messageToForward.video} 
+                className="w-16 h-16 object-cover rounded"
+              />
+              <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
+                <Video size={12} />
+                <span>Video</span>
+              </div>
+            </div>
+          )}
+          
+          {messageToForward.fileUrl && (
+            <div className="mb-2">
+              <div className="flex items-center gap-2 p-2 bg-gray-100 rounded">
+                <File size={16} />
+                <span className="text-sm">{messageToForward.fileName || "File"}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Hiển thị nội dung text */}
+          {messageToForward.content && (
+            <p className="text-sm text-gray-800">{messageToForward.content}</p>
+          )}
+        </div>
+
+        {/* Tùy chọn bao gồm caption cho media */}
+        {(messageToForward.image || messageToForward.video) && messageToForward.content && (
+          <div className="mt-3">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={includeCaption}
+                onChange={(e) => setIncludeCaption(e.target.checked)}
+                className="rounded"
+              />
+              <span className="text-sm text-gray-700">Bao gồm chú thích</span>
+            </label>
+          </div>
+        )}
+      </div>
+    );
   };
 
   if (!isOpen) return null;
@@ -73,9 +155,12 @@ const ForwardMessageModal = ({ isOpen, onClose, messageToForward }) => {
           </button>
         </div>
 
-        {/* Search */}
-        <div className="p-4 border-b">
-          <div className="relative">
+        <div className="p-4 flex-1 overflow-y-auto">
+          {/* Message Preview */}
+          {renderMessagePreview()}
+
+          {/* Search */}
+          <div className="relative mb-4">
             <Search size={20} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
             <input
               type="text"
@@ -85,58 +170,58 @@ const ForwardMessageModal = ({ isOpen, onClose, messageToForward }) => {
               className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
-        </div>
 
-        {/* Selected chats count */}
-        {selectedChats.length > 0 && (
-          <div className="px-4 py-2 bg-blue-50 text-blue-700 text-sm">
-            Đã chọn {selectedChats.length}/5 cuộc trò chuyện
-          </div>
-        )}
+          {/* Selected chats count */}
+          {selectedChats.length > 0 && (
+            <div className="px-4 py-2 bg-blue-50 text-blue-700 text-sm mb-4 rounded">
+              Đã chọn {selectedChats.length}/5 cuộc trò chuyện
+            </div>
+          )}
 
-        {/* Chat list */}
-        <div className="flex-1 overflow-y-auto">
-          {filteredChats.map((chat) => {
-            const isSelected = selectedChats.some(c => c.chatId === chat.chatId);
-            return (
-              <div
-                key={chat.chatId}
-                onClick={() => handleChatSelect(chat)}
-                className={`flex items-center p-4 hover:bg-gray-50 cursor-pointer ${
-                  isSelected ? 'bg-blue-50 border-r-4 border-blue-500' : ''
-                }`}
-              >
-                <div className="flex items-center gap-3 flex-1">
-                  <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
-                    {chat.isGroupChat ? (
-                      <Users size={20} className="text-gray-600" />
-                    ) : (
-                      <img
-                        src={chat.avatar || "/avatar.png"}
-                        alt={chat.name}
-                        className="w-10 h-10 rounded-full object-cover"
-                      />
-                    )}
+          {/* Chat list */}
+          <div className="space-y-2">
+            {filteredChats.map((chat) => {
+              const isSelected = selectedChats.some(c => c.chatId === chat.chatId);
+              return (
+                <div
+                  key={chat.chatId}
+                  onClick={() => handleChatSelect(chat)}
+                  className={`flex items-center p-3 rounded-lg cursor-pointer transition-colors ${
+                    isSelected ? 'bg-blue-50 border-2 border-blue-500' : 'hover:bg-gray-50 border-2 border-transparent'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 flex-1">
+                    <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
+                      {chat.isGroupChat ? (
+                        <Users size={20} className="text-gray-600" />
+                      ) : (
+                        <img
+                          src={chat.avatar || "/avatar.png"}
+                          alt={chat.name}
+                          className="w-10 h-10 rounded-full object-cover"
+                        />
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-medium">
+                        {chat.isGroupChat ? chat.groupName : chat.name}
+                      </h4>
+                      {chat.isGroupChat && (
+                        <p className="text-sm text-gray-500">
+                          {chat.participants.length} thành viên
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <h4 className="font-medium">
-                      {chat.isGroupChat ? chat.groupName : chat.name}
-                    </h4>
-                    {chat.isGroupChat && (
-                      <p className="text-sm text-gray-500">
-                        {chat.participants.length} thành viên
-                      </p>
-                    )}
-                  </div>
+                  {isSelected && (
+                    <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
+                      <div className="w-2 h-2 bg-white rounded-full"></div>
+                    </div>
+                  )}
                 </div>
-                {isSelected && (
-                  <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
-                    <div className="w-2 h-2 bg-white rounded-full"></div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
 
         {/* Footer */}

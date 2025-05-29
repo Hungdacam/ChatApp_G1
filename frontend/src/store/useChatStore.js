@@ -100,17 +100,137 @@ export const useChatStore = create((set, get) => ({
     }
   },
   
-  sendMessage: async ({ chatId, content, image, video , file }) => {
-    const tempId = `temp-${Date.now()}`;
-    const userId = localStorage.getItem("userId");
-    
-    const formData = new FormData();
-    formData.append("chatId", chatId);
-    if (content) formData.append("content", content);
-    if (image) formData.append("image", image);
-    if (video) formData.append("video", video);
-    if (file) formData.append("file", file);
-    
+sendMessage: async ({ chatId, content, image, video, file, images, videos, isForwarded, originalMessage }) => {
+  const tempId = `temp-${Date.now()}`;
+  const userId = localStorage.getItem("userId");
+
+  // XỬ LÝ CHUYỂN TIẾP (chỉ giữ 1 lần)
+  if (isForwarded && originalMessage) {
+    try {
+      console.log("Đang chuyển tiếp tin nhắn:", originalMessage);
+      
+      const response = await axios.post("/chat/send", {
+        chatId,
+        content: content || "",
+        isForwarded: true,
+        originalMessage: {
+          messageId: originalMessage.messageId,
+          content: originalMessage.content,
+          image: originalMessage.image,
+          video: originalMessage.video,
+          fileUrl: originalMessage.fileUrl,
+          fileName: originalMessage.fileName,
+          fileSize: originalMessage.fileSize,
+          senderId: originalMessage.senderId
+        }
+      }, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      console.log("Chuyển tiếp thành công:", response.data);
+      return response.data;
+    } catch (error) {
+      console.error("Lỗi chi tiết khi chuyển tiếp:", {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+        url: error.config?.url
+      });
+      throw error;
+    }
+  }
+  
+  const formData = new FormData();
+  formData.append("chatId", chatId);
+  if (content) formData.append("content", content);
+  
+  // Single files
+  if (image) formData.append("image", image);
+  if (video) formData.append("video", video);
+  if (file) formData.append("file", file);
+  
+  // Multiple files - THÊM MỚI
+  if (images && images.length > 0) {
+    images.forEach((img) => {
+      formData.append("images", img);
+    });
+  }
+  
+  if (videos && videos.length > 0) {
+    videos.forEach((vid) => {
+      formData.append("videos", vid);
+    });
+  }
+
+  // Tạo temp messages cho multiple files
+  const tempMessages = [];
+  
+  // Xử lý multiple images
+  if (images && images.length > 0) {
+    for (let i = 0; i < images.length; i++) {
+      const tempMessage = {
+        messageId: `${tempId}-img-${i}`,
+        chatId,
+        content: content || "[Image]",
+        senderId: {
+          _id: userId,
+          name: localStorage.getItem("userName") || "Tôi",
+          avatar: localStorage.getItem("userAvatar") || "https://via.placeholder.com/50"
+        },
+        createdAt: new Date().toISOString(),
+        isRead: false,
+        isTemp: true,
+        isPending: true,
+        status: 'PENDING'
+      };
+      
+      // Preview ảnh
+      tempMessage.image = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(images[i]);
+      });
+      
+      tempMessages.push(tempMessage);
+    }
+  }
+  
+  // Xử lý multiple videos
+  if (videos && videos.length > 0) {
+    for (let i = 0; i < videos.length; i++) {
+      const tempMessage = {
+        messageId: `${tempId}-vid-${i}`,
+        chatId,
+        content: content || "[Video]",
+        senderId: {
+          _id: userId,
+          name: localStorage.getItem("userName") || "Tôi",
+          avatar: localStorage.getItem("userAvatar") || "https://via.placeholder.com/50"
+        },
+        createdAt: new Date().toISOString(),
+        isRead: false,
+        isTemp: true,
+        isPending: true,
+        status: 'PENDING'
+      };
+      
+      // Preview video
+      tempMessage.video = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(videos[i]);
+      });
+      
+      tempMessages.push(tempMessage);
+    }
+  }
+  
+  // Single file temp message (giữ nguyên logic cũ)
+  if (!images && !videos) {
     const tempMessage = {
       messageId: tempId,
       chatId,
@@ -122,7 +242,7 @@ export const useChatStore = create((set, get) => ({
       },
       createdAt: new Date().toISOString(),
       isRead: false,
-      isTemp: true, // Thêm flag để đánh dấu đây là tin nhắn tạm thời
+      isTemp: true,
       isPending: true,
       status: 'PENDING'
     };
@@ -148,57 +268,51 @@ export const useChatStore = create((set, get) => ({
         if (!content) tempMessage.content = "[Video]";
       }
       
-       // Xử lý preview cho file
       if (file) {
         tempMessage.fileName = file.name;
         tempMessage.fileSize = file.size;
         if (!content) tempMessage.content = file.name;
       }
-
-      const { messages } = get();
-      const existingSimilarMsg = messages.find(msg =>
-        msg.content === tempMessage.content &&
-        msg.senderId._id === tempMessage.senderId._id &&
-        !msg.isPending &&
-        Math.abs(new Date(msg.createdAt) - new Date(tempMessage.createdAt)) < 5000
-      );
-
-      if (!existingSimilarMsg) {
-        set({ messages: [...messages, tempMessage] });
-      }
-
       
-      const response = await axios.post("/chat/send", formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-      
-      const serverMessage = response.data;
-      // Cập nhật tin nhắn tạm thời với messageId thực tế từ server
-      const updatedMessages = get().messages.filter(msg => msg.messageId !== tempId);
-      const completeServerMessage = {
-        ...serverMessage,
-        status: 'SENT',
-        _processed: true // Đánh dấu đã xử lý để tránh trùng lặp
-      };
-      set({ messages: [...updatedMessages, completeServerMessage] });
-      serverMessage._processed = true;
-      return response.data;
+      tempMessages.push(tempMessage);
     } catch (error) {
-      console.error("Lỗi khi gửi tin nhắn:", error);
-      
-      const { messages } = get();
-      const updatedMessages = messages.map(msg =>
-        msg.messageId === tempId
-          ? { ...msg, isError: true, isPending: false }
-          : msg
-      );
-      set({ messages: updatedMessages });
-      
-      throw error;
+      console.error("Error creating temp message:", error);
     }
-  },
+  }
+  
+  // Thêm temp messages vào state
+  const { messages } = get();
+  set({ messages: [...messages, ...tempMessages] });
+  
+  try {
+    const response = await axios.post("/chat/send", formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    
+    // Xóa temp messages
+    const tempIds = tempMessages.map(msg => msg.messageId);
+    const updatedMessages = get().messages.filter(msg => !tempIds.includes(msg.messageId));
+    set({ messages: updatedMessages });
+    
+    return response.data;
+  } catch (error) {
+    console.error("Lỗi khi gửi tin nhắn:", error);
+    
+    // Cập nhật temp messages thành error state
+    const { messages } = get();
+    const updatedMessages = messages.map(msg => {
+      if (tempMessages.some(temp => temp.messageId === msg.messageId)) {
+        return { ...msg, isError: true, isPending: false };
+      }
+      return msg;
+    });
+    set({ messages: updatedMessages });
+    
+    throw error;
+  }
+},
   
   
 
