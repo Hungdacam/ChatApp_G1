@@ -59,11 +59,10 @@ exports.cancelFriendRequest = async (req, res) => {
     if (!deleted) {
       return res.status(404).json({ message: 'Không tìm thấy lời mời để hủy' });
     }
-
-    // Gửi thông báo realtime
     const io = req.app.get('io');
     const onlineUsers = req.app.get('onlineUsers');
     const receiverSocketId = onlineUsers.get(receiverId.toString());
+
     if (receiverSocketId) {
       io.to(receiverSocketId).emit('friend-request-canceled', { senderId });
     }
@@ -212,6 +211,7 @@ exports.canSendMessage = async (req, res) => {
     res.status(500).json({ message: 'Lỗi server' });
   }
 };
+
 exports.rejectFriendRequest = async (req, res) => {
   const receiverId = req.user._id; // Người nhận lời mời (User B)
   const { senderId } = req.body; // Người gửi lời mời (User A)
@@ -245,12 +245,12 @@ exports.rejectFriendRequest = async (req, res) => {
     res.status(500).json({ message: 'Lỗi server', error: error.message });
   }
 };
+
 exports.unfriend = async (req, res) => {
   const userId1 = req.user._id;
   const { friendId: userId2 } = req.body;
 
   try {
-
     const deleted = await Friendship.findOneAndDelete({
       $or: [
         { userId1, userId2, status: 'accepted' },
@@ -266,5 +266,92 @@ exports.unfriend = async (req, res) => {
   } catch (error) {
     console.error('Lỗi hủy kết bạn:', error.message);
     res.status(500).json({ message: 'Lỗi server' });
+  }
+};
+
+exports.checkContacts = async (req, res) => {
+  const { phoneNumbers } = req.body;
+  const userId = req.user._id;
+
+  try {
+    if (!phoneNumbers || !Array.isArray(phoneNumbers) || phoneNumbers.length === 0) {
+      return res.status(400).json({ message: 'Danh sách số điện thoại không hợp lệ' });
+    }
+
+    // Tìm tất cả user đã đăng ký (trừ chính mình)
+    const registeredUsers = await User.find({
+      phone: { $in: phoneNumbers },
+      _id: { $ne: userId },
+    }).select('_id name avatar phone');
+
+    // Lấy tất cả mối quan hệ liên quan
+    const friendships = await Friendship.find({
+      $or: [
+        { userId1: userId, userId2: { $in: registeredUsers.map(u => u._id) } },
+        { userId2: userId, userId1: { $in: registeredUsers.map(u => u._id) } },
+      ],
+    });
+
+    // Map trạng thái cho từng user
+    const result = registeredUsers.map(user => {
+      const friendship = friendships.find(f =>
+        (f.userId1.toString() === userId.toString() && f.userId2.toString() === user._id.toString()) ||
+        (f.userId2.toString() === userId.toString() && f.userId1.toString() === user._id.toString())
+      );
+      if (!friendship) {
+        return { ...user.toObject(), friendStatus: "none", isSender: false };
+      }
+      if (friendship.status === "accepted") {
+        return { ...user.toObject(), friendStatus: "friends", isSender: false };
+      }
+      if (friendship.status === "pending") {
+        return {
+          ...user.toObject(),
+          friendStatus: "pending",
+          isSender: friendship.userId1.toString() === userId.toString(),
+        };
+      }
+    });
+
+    res.status(200).json({ registeredUsers: result });
+  } catch (error) {
+    console.error('Lỗi kiểm tra danh bạ:', error);
+    res.status(500).json({ message: 'Lỗi server', error: error.message });
+  }
+};
+
+exports.checkFriendStatus = async (req, res) => {
+  const userId = req.user._id;
+  const { targetUserId } = req.body;
+
+  try {
+    if (!targetUserId) {
+      return res.status(400).json({ message: 'Thiếu ID người dùng mục tiêu' });
+    }
+
+    const friendship = await Friendship.findOne({
+      $or: [
+        { userId1: userId, userId2: targetUserId },
+        { userId1: targetUserId, userId2: userId },
+      ],
+    });
+
+    if (!friendship) {
+      return res.status(200).json({ status: 'none' });
+    }
+
+    if (friendship.status === 'accepted') {
+      return res.status(200).json({ status: 'friends' });
+    }
+
+    if (friendship.status === 'pending') {
+      return res.status(200).json({
+        status: 'pending',
+        isSender: friendship.userId1.toString() === userId.toString(),
+      });
+    }
+  } catch (error) {
+    console.error('Lỗi kiểm tra trạng thái bạn bè:', error);
+    res.status(500).json({ message: 'Lỗi server', error: error.message });
   }
 };

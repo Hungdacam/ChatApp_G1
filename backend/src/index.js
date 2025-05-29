@@ -24,8 +24,10 @@ app.use(cookieParser());
 
 // 🌐 Cho phép gọi API từ client frontend
 app.use(cors({
-    origin: "http://localhost:5173",
-    credentials: true
+  origin: process.env.NODE_ENV === 'production' 
+    ? ["http://localhost", "http://frontend"] 
+    : "http://localhost:5173",
+  credentials: true
 }));
 
 // 📦 Xử lý dữ liệu JSON và ảnh base64 có kích thước lớn
@@ -43,11 +45,13 @@ app.use('/api/contacts',contactRoutes)
 const server = http.createServer(app);
 
 const io = socketio(server, {
-    cors: {
-        origin: 'http://localhost:5173',
-        methods: ['GET', 'POST'],
-        credentials: true,
-    }
+  cors: {
+    origin: process.env.NODE_ENV === 'production' 
+      ? ["http://localhost", "http://frontend"] 
+      : 'http://localhost:5173',
+    methods: ['GET', 'POST'],
+    credentials: true,
+  }
 });
 console.log("Socket.IO initialized");
 
@@ -101,20 +105,16 @@ io.on('connection', (socket) => {
           console.error("Lỗi khi kiểm tra cuộc gọi đang diễn ra:", error);
         }
       });
-socket.on("join_chat", (chatId) => {
-        socket.join(chatId);
-        const roomSize = io.sockets.adapter.rooms.get(chatId)?.size || 0;
-        console.log(`✅ User ${socket.id} joined chat room: ${chatId}`);
-        console.log(`📊 Room ${chatId} có ${roomSize} người`);
-        
-        // Xác nhận join thành công
-        socket.emit("joined_room", { chatId, roomSize });
-    });
-
-    socket.on("leave_chat", (chatId) => {
-        socket.leave(chatId);
-        console.log(`User ${socket.id} left chat room: ${chatId}`);
-    });
+socket.on("join_chat", (data) => {
+    const chatId = typeof data === "string" ? data : data.chatId;
+    socket.join(chatId);
+    console.log(`Socket ${socket.id} đã join phòng chat ${chatId}`);
+});
+    socket.on("leave_chat", (data) => {
+    const chatId = typeof data === "string" ? data : data.chatId;
+    socket.leave(chatId);
+    console.log(`Socket ${socket.id} đã rời phòng chat ${chatId}`);
+});
 
     socket.on('disconnect', () => {
         console.log('Người dùng đã ngắt kết nối: ' + socket.id);
@@ -441,4 +441,14 @@ app.set('onlineUsers', onlineUsers);
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port: ${PORT}`);
     connectDB();
+});
+
+// Health check endpoint cho Docker
+app.get('/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    service: 'ShibaTalk Backend'
+  });
 });

@@ -54,7 +54,6 @@ const streamCallSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
-streamCallSchema.index({ callId: 1 });
 streamCallSchema.index({ initiator: 1 });
 streamCallSchema.index({ participants: 1 });
 streamCallSchema.index({ chatId: 1 });
