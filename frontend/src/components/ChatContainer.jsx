@@ -131,7 +131,7 @@ const ChatContainer = () => {
                   key={message.messageId || message._id}
                   message={message}
                   currentUserId={currentUserId}
-                  isGroupChat={selectedChat.isGroupChat} 
+                  isGroupChat={selectedChat?.isGroupChat || false}
                 />
               ))}
             <div ref={messageEndRef} />

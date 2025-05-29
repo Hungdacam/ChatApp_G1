@@ -1,4 +1,5 @@
 import { useChatStore } from "../store/useChatStore";
+import { useSocketStore } from "../store/useSocketStore"; // Thêm import này
 import { useFriendStore } from "../store/useFriendStore";
 import React, { useState, useRef, useEffect } from 'react';
 import { ArrowLeft, MoreVertical, Users } from "lucide-react";
@@ -7,7 +8,8 @@ import StartCallButton from './StartCallButton';
 import StartGroupCallButton from './StartGroupCallButton';
 
 const ChatHeader = () => {
-  const { selectedChat } = useChatStore();
+  const { selectedChat, setSelectedChat } = useChatStore();
+  const { onlineUsers } = useSocketStore(); // Thêm dòng này
   const { unfriend } = useFriendStore();
   const [showGroupInfo, setShowGroupInfo] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
@@ -20,9 +22,11 @@ const ChatHeader = () => {
         setShowMenu(false);
       }
     };
+
     if (showMenu) {
       document.addEventListener("mousedown", handleClickOutside);
     }
+
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
@@ -32,108 +36,119 @@ const ChatHeader = () => {
     console.log("selectedChat không hợp lệ:", selectedChat);
     return null;
   }
+
   const isGroupChat = selectedChat.isGroupChat;
+  const currentUserId = localStorage.getItem("userId"); // ✅ Lấy từ localStorage
+  
+  // ✅ Sửa logic lấy otherUser
   const otherUser = selectedChat.participants.find(
-    (p) => p._id !== selectedChat.currentUserId
+    (p) => p._id !== currentUserId
   );
+  
+  // ✅ Kiểm tra trạng thái online từ onlineUsers store
+  const isUserOnline = otherUser && onlineUsers.includes(otherUser._id);
 
   if (isGroupChat) {
     return (
-      <div className="flex items-center justify-between p-4 border-b border-gray-200">
+      <div className="w-full p-3 border-b border-base-300">
         <div className="flex items-center gap-3">
-          <button onClick={() => window.history.back()} className="text-gray-600">
+          <button onClick={() => setSelectedChat(null)} className="lg:hidden">
             <ArrowLeft size={24} />
           </button>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center">
-              <Users size={20} className="text-white" />
+          
+          <div className="flex items-center gap-3 flex-1">
+            <div className="avatar">
+              <div className="size-10 rounded-full">
+                <img
+                  src={selectedChat.avatar || "/group-avatar.png"}
+                  alt={selectedChat.groupName || selectedChat.name || "Group"}
+                />
+              </div>
             </div>
+            
             <div>
-              <h3 className="font-semibold">{selectedChat.groupName}</h3>
-              <p className="text-sm text-gray-500">
-                {selectedChat.participants.length} thành viên
-              </p>
-              <p className="text-xs text-gray-400">
-                {selectedChat.isOnline ? "Đang hoạt động" : "Không hoạt động"}
+              {/* ✅ Thêm fallback cho tên nhóm */}
+              <h3 className="font-medium">
+                {selectedChat.groupName || selectedChat.name || "Nhóm chat"}
+              </h3>
+              <p className="text-sm text-base-content/70">
+                {selectedChat.participants?.length || 0} thành viên
               </p>
             </div>
           </div>
+          
+          <div className="flex items-center gap-2">
+            <StartGroupCallButton />
+            <button
+              onClick={() => setShowGroupInfo(true)}
+              className="btn btn-ghost btn-sm btn-circle"
+            >
+              <Users size={20} />
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <StartGroupCallButton 
-            chatId={selectedChat.chatId}
-            className="text-gray-600 hover:text-blue-600 p-2 rounded-full hover:bg-gray-100"
-          />
-          <button 
-            onClick={() => setShowGroupInfo(true)}
-            className="text-gray-600 hover:text-blue-600 p-2 rounded-full hover:bg-gray-100"
-          >
-            <MoreVertical size={20} />
-          </button>
-        </div>
+        
         {showGroupInfo && (
-          <GroupChatInfo onClose={() => setShowGroupInfo(false)} />
+          <GroupChatInfo 
+            chat={selectedChat} 
+            onClose={() => setShowGroupInfo(false)} 
+          />
         )}
       </div>
     );
   }
 
-  if (!otherUser) {
-    console.log("Không tìm thấy người dùng khác trong participants");
-    return null;
-  }
-
-  // Hàm xử lý hủy kết bạn
-  const handleUnfriend = async () => {
-    setShowMenu(false);
-    await unfriend(otherUser._id);
-    // Có thể thêm logic chuyển màn hình hoặc reload chat list nếu cần
-  };
-
   return (
-    <div className="flex items-center justify-between p-3 border-b">
-      <div className="flex items-center">
-        <button className="p-1 mr-2 rounded-full hover:bg-gray-100 md:hidden">
-          <ArrowLeft size={20} />
+    <div className="w-full p-3 border-b border-base-300">
+      <div className="flex items-center gap-3">
+        <button onClick={() => setSelectedChat(null)} className="lg:hidden">
+          <ArrowLeft size={24} />
         </button>
-        <img
-          src={otherUser.avatar || "https://via.placeholder.com/40"}
-          alt={otherUser.name || "User"}
-          className="w-10 h-10 rounded-full mr-3"
-        />
-        <div>
-          <h3 className="font-medium">{otherUser.name || "User"}</h3>
-          <p className="text-xs text-gray-500">
-            {selectedChat.isOnline ? "Đang hoạt động" : "Không hoạt động"}
-          </p>
-        </div>
-      </div>
-      <div className="flex items-center relative">
-        <div className="flex items-center gap-4">
-          <StartCallButton 
-            chatId={selectedChat.chatId}
-            className="text-gray-600 hover:text-blue-500"
-          />
-        </div>
-        <button
-          className="p-2 rounded-full hover:bg-gray-100"
-          onClick={() => setShowMenu((v) => !v)}
-        >
-          <MoreVertical size={20} />
-        </button>
-        {showMenu && (
-          <div
-            ref={menuRef}
-            className="absolute right-0 top-12 bg-white border rounded shadow-md z-10 min-w-[140px]"
-          >
-            <button
-              onClick={handleUnfriend}
-              className="block w-full text-left px-4 py-2 text-red-600 hover:bg-gray-100"
-            >
-              Hủy kết bạn
-            </button>
+        
+        <div className="flex items-center gap-3 flex-1">
+          <div className="avatar">
+            <div className="size-10 rounded-full">
+              <img
+                src={otherUser?.avatar || "/avatar.png"}
+                alt={otherUser?.name || "User"}
+              />
+            </div>
           </div>
-        )}
+          
+          <div>
+            <h3 className="font-medium">{otherUser?.name || "User"}</h3>
+            <p className="text-sm text-base-content/70">
+              {/* ✅ Sử dụng isUserOnline thay vì selectedChat.isOnline */}
+              {isUserOnline ? "Đang hoạt động" : "Không hoạt động"}
+            </p>
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <StartCallButton otherUser={otherUser} />
+          <div className="relative" ref={menuRef}>
+            <button
+              onClick={() => setShowMenu(!showMenu)}
+              className="btn btn-ghost btn-sm btn-circle"
+            >
+              <MoreVertical size={20} />
+            </button>
+            
+            {showMenu && (
+              <div className="absolute right-0 top-full mt-1 w-48 bg-base-100 rounded-lg shadow-lg border border-base-300 z-50">
+                <button
+                  onClick={() => {
+                    unfriend(otherUser._id);
+                    setShowMenu(false);
+                  }}
+                  className="w-full px-4 py-2 text-left hover:bg-base-200 text-error rounded-lg"
+                >
+                  Hủy kết bạn
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

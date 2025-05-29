@@ -105,18 +105,15 @@ const ImageWithFallback = ({ src, alt, className }) => {
 };
 
   const isSentByMe = useMemo(() => {
-    if (!message.senderId || !currentUserId) return false;
-    
-    if (typeof message.senderId === 'object' && message.senderId._id) {
-      return message.senderId._id === currentUserId;
-    }
-    
-    if (typeof message.senderId === 'string') {
-      return message.senderId === currentUserId;
-    }
-    
-    return false;
-  }, [message.senderId, currentUserId]);
+  if (!message.senderId || !currentUserId) return false;
+  
+  const senderId = typeof message.senderId === 'object' 
+    ? message.senderId._id?.toString() 
+    : message.senderId.toString();
+  
+  return senderId === currentUserId.toString();
+}, [message.senderId, currentUserId]);
+
   
   const formattedTime = message.createdAt 
     ? formatDistanceToNow(new Date(message.createdAt), { addSuffix: true, locale: vi }) 
@@ -242,13 +239,6 @@ const ImageWithFallback = ({ src, alt, className }) => {
             </div>
           )}
           
-          {message.isForwarded && (
-            <div className="text-xs opacity-75 mb-1 flex items-center gap-1">
-              <Forward size={12} />
-              Đã chuyển tiếp
-            </div>
-          )}
-
           {message.isPinned && (
             <div className="text-xs opacity-75 mb-1 flex items-center gap-1">
               <Pin size={12} />
@@ -263,7 +253,7 @@ const ImageWithFallback = ({ src, alt, className }) => {
     <Forward size={12} />
     <span>Đã chuyển tiếp</span>
     {message.forwardedFrom && (
-      <span className="text-xs">từ {message.forwardedFrom.name}</span>
+      <span className="text-xs">{message.forwardedFrom.name}</span>
     )}
   </div>
 )}
