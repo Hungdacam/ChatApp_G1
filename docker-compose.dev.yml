@@ -1,0 +1,42 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: shibatalk-backend
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend/src:/app/src:ro
+    networks:
+      - shibatalk-network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: shibatalk-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - shibatalk-network
+    restart: unless-stopped
+    # Thêm health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  mongo_data:
+
+networks:
+  shibatalk-network:
+    driver: bridge
