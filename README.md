@@ -75,7 +75,7 @@ Dưới đây là một số hình ảnh minh họa về giao diện của dự 
 ![Search Friend Screen](./demo/SearchFriendScreen.png)
 
 ### 🏠 Cuộc gọi
-![Call Screen](./demo//CallScreen.jpg)
+![Call Screen](https://raw.githubusercontent.com/Hungdacam/ChatApp_G1/main/demo/CallScreen.jpg)
 
 ## ⚙️ Hướng dẫn cài đặt & chạy
 
