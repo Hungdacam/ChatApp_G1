@@ -101,6 +101,7 @@ Dưới đây là một số hình ảnh minh họa các chức năng nổi bậ
 ## ⚙️ Hướng dẫn cài đặt & chạy
 
 ### ✅ 1. Clone và cấu hình môi trường
+
 ```bash
 git clone https://github.com/Hungdacam/ChatApp_G1
 cd ChatApp_G1
