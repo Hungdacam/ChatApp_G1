@@ -149,8 +149,8 @@ docker-compose -f docker-compose.prod.yml up --build
 - Giao diện sử dụng TailwindCSS kết hợp DaisyUI  
 
 ## 👨‍💻 Tác giả
-- ConnectSphere Team  
-- 🔗 GitHub: https://github.com/ConnectSphere  
+- Hungdacam 
+- 🔗 GitHub: https://github.com/Hungdacam  
 
 ## 🌈 Happy Connecting!
 - 💬 "Mỗi tin nhắn là một câu chuyện!"  
