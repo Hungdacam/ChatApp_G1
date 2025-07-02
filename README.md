@@ -62,9 +62,10 @@ Docker, Docker Compose, Nodemon
 │       ├── lib/
 │       ├── pages/
 │       ├── store/
-│       ├── App.jsx / main.jsx
-├── demo/                  # Ảnh demo giao diện
-├── Dockerfile             # Production Dockerfile
+│       ├── App.jsx
+│       └── main.jsx
+├── demo/                        # Ảnh demo giao diện
+├── Dockerfile                  # Production Dockerfile
 ├── docker-compose.dev.yml
 ├── docker-compose.prod.yml
 └── README.md
@@ -72,6 +73,7 @@ Docker, Docker Compose, Nodemon
 
 🖼️ Giao diện Demo
 Dưới đây là một số hình ảnh minh họa các chức năng nổi bật:
+
 
 ### 🏠 Đăng nhập
 
