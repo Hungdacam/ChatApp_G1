@@ -27,7 +27,6 @@ ShibaTalk là ứng dụng chat realtime được xây dựng dựa trên kiến
 | DevOps           | Docker, Docker Compose, Nodemon        |
 
 ## 📁 Cấu trúc thư mục
-```
 📦 ChatApp_G1
 ├── backend/
 │   └── src/
@@ -46,37 +45,58 @@ ShibaTalk là ứng dụng chat realtime được xây dựng dựa trên kiến
 │       ├── lib/
 │       ├── pages/
 │       ├── store/
-│       ├── App.jsx / main.jsx
-├── demo/                  # Ảnh demo giao diện
-├── Dockerfile             # Production Dockerfile
+│       ├── App.jsx
+│       └── main.jsx
+├── demo/
+├── Dockerfile
 ├── docker-compose.dev.yml
 ├── docker-compose.prod.yml
 └── README.md
-```
 
 ## 🖼️ Giao diện Demo
 Dưới đây là một số hình ảnh minh họa các chức năng nổi bật:
 
-- 🏠 Đăng nhập  
-  ![Login Screen](./demo/LoginScreen.png)  
+### 🏠 Đăng nhập
 
-- 🏠 Đăng ký  
-  ![Register Screen](./demo/RegisterScreen.png)  
+![Login Screen](./demo/LoginScreen.png)
 
-- 🏠 Trang chủ  
-  ![Home Page](./demo/HomePage.png)  
+---
 
-- 🏠 Giao diện nhắn tin  
-  ![Chat Screen](./demo/ChatScreen.png)  
+### 🏠 Đăng ký
 
-- 🏠 Thông tin người dùng  
-  ![Profile Screen](./demo/ProfileScreen.png)  
+![Register Screen:](./demo/RegisterScreen.png)
 
-- 🏠 Tìm kiếm bạn bè  
-  ![Search Friend Screen](./demo/SearchFriendScreen.png)  
+---
 
-- 🏠 Cuộc gọi  
-  ![Call Screen](./demo/CallScreen.jpg)  
+### 🏠 Trang chủ
+
+![Home Page:](./demo/HomePage.png)  
+
+---
+
+### 🏠 Giao diện nhắn tin
+
+![Chat Screen:](./demo/ChatScreen.png)  
+
+---
+
+### 🏠 Thông tin người dùng
+
+![Profile Screen:](./demo/ProfileScreen.png)    
+
+---
+
+### 🏠 Tìm kiếm bạn bè
+
+![Search Friend Screen:](./demo/SearchFriendScreen.png)    
+
+---
+
+### 🏠 Cuộc gọi
+
+![Call Screen:](./demo/CallScreen.jpg)
+
+---
 
 ## ⚙️ Hướng dẫn cài đặt & chạy
 
