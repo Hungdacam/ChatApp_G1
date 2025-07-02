@@ -57,7 +57,7 @@ ShibaTalk là ứng dụng chat realtime được xây dựng dựa trên kiến
 Dưới đây là một số hình ảnh minh họa về giao diện của dự án:
 
 ### 🏠 Đăng nhập
-![Login Screen](./demo/LoginScreen.png)
+![Login Screen](demo/LoginScreen.png)
 
 ### 🏠 Đăng ký
 ![Register Screen](./demo/RegisterScreen.png)
