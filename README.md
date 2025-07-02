@@ -58,43 +58,42 @@ Dưới đây là một số hình ảnh minh họa các chức năng nổi bậ
 
 ### 🏠 Đăng nhập
 
-![Login Screen](./demo/LoginScreen.png)
+![Login Screen](./LoginScreen.png)
 
 ---
 
 ### 🏠 Đăng ký
 
-![Register Screen:](./demo/RegisterScreen.png)
+![Register Screen](./RegisterScreen.png)
 
 ---
 
 ### 🏠 Trang chủ
 
-![Home Page:](./demo/HomePage.png)  
+![Home Page](./HomePage.png)
 
 ---
 
 ### 🏠 Giao diện nhắn tin
 
-![Chat Screen:](./demo/ChatScreen.png)  
-
+![Chat Screen](./ChatScreen.png)
 ---
 
 ### 🏠 Thông tin người dùng
 
-![Profile Screen:](./demo/ProfileScreen.png)    
+![Profile Screen](./demo/ProfileScreen.png)    
 
 ---
 
 ### 🏠 Tìm kiếm bạn bè
 
-![Search Friend Screen:](./demo/SearchFriendScreen.png)    
+![Search Friend Screen](./SearchFriendScreen.png)
 
 ---
 
 ### 🏠 Cuộc gọi
 
-![Call Screen:](./demo/CallScreen.jpg)
+![Call Screen](./CallScreen.jpg)
 
 ---
 
