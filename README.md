@@ -54,28 +54,28 @@ ShibaTalk là ứng dụng chat realtime được xây dựng dựa trên kiến
 └── README.md
 
 ## 🖼️ Giao diện Demo
-Dưới đây là một số hình ảnh minh họa các chức năng nổi bật từ thư mục `demo/`:
+Dưới đây là một số hình ảnh minh họa về giao diện của dự án:
 
 ### 🏠 Đăng nhập
-![Login Screen](./demo/CallScreen.jpg)
+![Login Screen](./demo/LoginScreen.png)
 
 ### 🏠 Đăng ký
-![Register Screen](./demo/ChatGroup.png)
+![Register Screen](./demo/RegisterScreen.png)
 
 ### 🏠 Trang chủ
-![Home Page](./demo/ChatScreen.png)
+![Home Page](./demo/HomePage.png)
 
 ### 🏠 Giao diện nhắn tin
-![Chat Screen](./demo/HomePage.png)
+![Chat Screen](./demo/ChatScreen.png)
 
 ### 🏠 Thông tin người dùng
-![Profile Screen](./demo/LoginScreen.png)
+![Profile Screen](./demo/ProfileScreen.png)
 
 ### 🏠 Tìm kiếm bạn bè
-![Search Friend Screen](./demo/ProfileScreen.png)
+![Search Friend Screen](./demo/SearchFriendScreen.png)
 
 ### 🏠 Cuộc gọi
-![Call Screen](./demo/RegisterScreen.png)
+![Call Screen](./demo//CallScreen.jpg)
 
 ## ⚙️ Hướng dẫn cài đặt & chạy
 
