@@ -83,14 +83,14 @@ Dưới đây là các hình ảnh minh họa giao diện của ứng dụng:
 
 ### ✅ 1. Clone và cấu hình môi trường
 ```bash
-git clone https://github.com/ConnectSphere/ConnectSphere
-cd ConnectSphere
+git clone https://github.com/Hungdacam/ChatApp_G1
+cd ChatApp_G1
 ```
 
 Tạo file `.env` trong thư mục `backend/`:
 ```
 # Database
-MONGODB_URI=mongodb://localhost:27017/connectsphere
+MONGODB_URI=mongodb://localhost:27017/your_database
 
 # JWT
 JWT_SECRET=your_super_secret_jwt_key_here
