@@ -23,10 +23,19 @@ dotenv.config();
 app.use(cookieParser());
 
 // 🌐 Cho phép gọi API từ client frontend
+const allowedOrigins = [
+  "http://localhost:5173",                           // dev
+  "https://chat-app-g1.vercel.app/"           // production
+];
+
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? ["http://localhost", "http://frontend"] 
-    : "http://localhost:5173",
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
   credentials: true
 }));
 
@@ -46,9 +55,10 @@ const server = http.createServer(app);
 
 const io = socketio(server, {
   cors: {
-    origin: process.env.NODE_ENV === 'production' 
-      ? ["http://localhost", "http://frontend"] 
-      : 'http://localhost:5173',
+    origin: [
+      "http://localhost:5173",
+      "https://chat-app-g1.vercel.app"
+    ],
     methods: ['GET', 'POST'],
     credentials: true,
   }

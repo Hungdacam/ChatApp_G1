@@ -38,17 +38,18 @@ ShibaTalk/
 │   │   ├── routes/
 │   │   ├── services/
 │   │   └── index.js
-│   └── frontend/
-│       ├── src/
-│       │   ├── assets/
-│       │   ├── components/
-│       │   ├── constants/
-│       │   ├── lib/
-│       │   ├── pages/
-│       │   ├── store/
-│       │   ├── App.jsx
-│       │   └── main.jsx
-│       └── demo/
+│── frontend/
+│   ├── src/
+│   │   ├── assets/
+│   │   ├── components/
+│   │   ├── constants/
+│   │   ├── lib/
+│   │   ├── pages/
+│   │   ├── store/
+│   │   ├── App.jsx
+│   │   └── main.jsx
+│── Mobile/ 
+│── demo/
 ├── Dockerfile
 ├── docker-compose.dev.yml
 ├── docker-compose.prod.yml
