@@ -25,7 +25,7 @@ app.use(cookieParser());
 // 🌐 Cho phép gọi API từ client frontend
 const allowedOrigins = [
   "http://localhost:5173",                           // dev
-  "https://chat-app-g1.vercel.app/"           // production
+  "https://chat-app-g1.vercel.app"           // production
 ];
 
 app.use(cors({
