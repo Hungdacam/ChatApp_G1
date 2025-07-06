@@ -24,7 +24,7 @@ export const useSocketStore = create((set) => ({
       return;
     }
 
-    const socket = io("http://localhost:3000", {
+    const socket = io(import.meta.env.VITE_SOCKET_URL || "http://localhost:3000", {
       withCredentials: true, // Gửi cookie trong kết nối socket
       transports: ["websocket"],
       auth: { token, userId }, // Gửi token và userId trong auth
