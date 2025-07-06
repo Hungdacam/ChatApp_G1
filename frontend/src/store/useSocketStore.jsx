@@ -15,7 +15,9 @@ export const useSocketStore = create((set) => ({
   socket: null,
   onlineUsers: [], // Thêm trạng thái onlineUsers
   incomingCall: null,
-  connectSocket: (token, userId) => {
+  connectSocket: (tokenArg, userIdArg) => {
+    const token = tokenArg || localStorage.getItem("authToken");
+    const userId = userIdArg || localStorage.getItem("userId");
     console.log("Đang kết nối socket với token:", token ? "Có token" : "Không có token");
     console.log("userId:", userId);
     // Kiểm tra nếu socket đã kết nối thì bỏ qua

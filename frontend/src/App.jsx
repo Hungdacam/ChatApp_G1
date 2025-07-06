@@ -28,9 +28,10 @@ const App = () => {
   const [isSocketReady, setIsSocketReady] = useState(false);
 
   useEffect(() => {
-    if (authUser) {
+    const token = localStorage.getItem("authToken");
+    if (authUser && token) {
       console.log("authUser trong App:", authUser);
-      connectSocket(null, authUser._id);
+      connectSocket(token, authUser._id);
     }
 
     return () => {
