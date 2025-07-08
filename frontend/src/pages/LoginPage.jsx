@@ -35,6 +35,19 @@ const LoginPage = () => {
               <p className="text-base-content/60">Sign in to your account</p>
             </div>
           </div>
+          {/* Demo Account Info */}
+          <div className="mb-6 p-4 rounded-lg bg-base-200 border border-base-300">
+            <h2 className="font-semibold text-base-content mb-1">🔒 Demo Account</h2>
+            <p className="text-sm text-base-content/70">
+              To make it easier for you to explore the app, you can use the demo account below without needing to register. 
+              This is because phone number verification via OTP (using Twilio) currently only supports my personal phone number.
+            </p>
+            <div className="mt-3 text-sm text-base-content">
+              <p><strong>Phone:</strong> 0917316172</p>
+              <p><strong>Password:</strong> 123456</p>
+            </div>
+          </div>
+
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-6">
