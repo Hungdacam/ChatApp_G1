@@ -4,10 +4,10 @@ const User = require('../models/user.model');
 const protectRoute = async (req, res, next) => {
     try {
         let token;
-
+        const clientType = req.headers["x-client-type"] || "mobile";
         // 1. Lấy token từ cookie hoặc Authorization header
-        if (req.cookies && req.cookies.jwt) {
-            token = req.cookies.jwt; // từ cookie (web)
+        if (clientType === "web" && req.cookies && req.cookies.jwt) {
+               token = req.cookies.jwt;
         } else if (
             req.headers.authorization &&
             req.headers.authorization.startsWith('Bearer ')

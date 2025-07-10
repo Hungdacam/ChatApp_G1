@@ -18,29 +18,23 @@ import { useFriendStore } from "./store/useFriendStore";
 import FriendRequestsPage from "./pages/FriendRequestsPage";
 import CallPage from "./pages/CallPage";
 import IncomingCallNotification from "./components/IncomingCallNotification";
-import FriendListPage from './pages/FriendListPage';
+import FriendListPage from "./pages/FriendListPage";
 import ContactsPage from "./pages/ContactsPage";
 
 const App = () => {
-  const { authUser } = useAuthStore(); // Không cần setOnlineUsers từ useAuthStore nữa
-  const { socket, connectSocket, disconnectSocket, setOnlineUsers } = useSocketStore(); // Lấy setOnlineUsers từ useSocketStore
+  const { authUser, checkAuth, isCheckingAuth } = useAuthStore();
+  const { socket, disconnectSocket, setOnlineUsers } = useSocketStore(); // Lấy setOnlineUsers từ useSocketStore
   const { setupSocketListeners } = useFriendStore();
   const [isSocketReady, setIsSocketReady] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem("authToken");
-    if (authUser && token) {
-      console.log("authUser trong App:", authUser);
-      connectSocket(token, authUser._id);
+    checkAuth(); // Gọi checkAuth khi ứng dụng khởi động
+  }, [checkAuth]);
+  useEffect(() => {
+    if (authUser?._id) {
+      useSocketStore.getState().connectSocket(authUser._id);
     }
-
-    return () => {
-      if (socket) {
-        disconnectSocket();
-      }
-    };
   }, [authUser]);
-
   useEffect(() => {
     if (socket) {
       const handleOnlineUsers = (users) => {
@@ -64,79 +58,98 @@ const App = () => {
     }
   }, [socket, setupSocketListeners]);
 
+  useEffect(() => {
+    return () => {
+      disconnectSocket();
+    };
+  }, [disconnectSocket]);
   return (
     <div>
       <Navbar />
-      <Routes>
-        <Route
-          path="/login"
-          element={!authUser ? <LoginPage /> : <Navigate to="/" replace />}
-        />
-        <Route
-          path="/signup"
-          element={!authUser ? <SignUpPage /> : <Navigate to="/" replace />}
-        />
-        <Route
-          path="/verify-otp"
-          element={!authUser ? <VerifyOTPPage /> : <Navigate to="/" replace />}
-        />
-        <Route
-          path="/forgot-password"
-          element={
-            !authUser ? <ForgotPasswordPage /> : <Navigate to="/login" replace />
-          }
-        />
-        <Route path="/friends" element={<FriendListPage />} />
-        <Route
-          path="/"
-          element={
-            authUser ? (
-              <HomePage isSocketReady={isSocketReady} />
-            ) : (
-              <Navigate to="/login" replace />
-            )
-          }
-        />
-        <Route path="/contacts" element={authUser ? <ContactsPage /> : <Navigate to="/login" />} />
-        <Route
-          path="/settings"
-          element={authUser ? <SettingsPage /> : <Navigate to="/login" replace />}
-        />
-        <Route
-          path="/profile"
-          element={authUser ? <ProfilePage /> : <Navigate to="/login" replace />}
-        />
-        <Route
-          path="/search"
-          element={
-            authUser ? <SearchFriendPage /> : <Navigate to="/login" replace />
-          }
-        />
-        <Route
-          path="/add-friend"
-          element={authUser ? <AddFriendPage /> : <Navigate to="/login" replace />}
-        />
-        <Route
-          path="/friend-requests"
-          element={
-            authUser ? <FriendRequestsPage /> : <Navigate to="/login" replace />}
-        />
-        <Route
-          path="/call/:id"
-          element={authUser ? <CallPage /> : <Navigate to="/login" replace />}
-        />
-      </Routes>
+      {isCheckingAuth ? (
+        <div>Loading...</div>
+      ) : (
+        <Routes>
+          <Route
+            path="/login"
+            element={!authUser ? <LoginPage /> : <Navigate to="/" replace />}
+          />
+          <Route
+            path="/signup"
+            element={!authUser ? <SignUpPage /> : <Navigate to="/" replace />}
+          />
+          <Route
+            path="/verify-otp"
+            element={
+              !authUser ? <VerifyOTPPage /> : <Navigate to="/" replace />
+            }
+          />
+          <Route
+            path="/forgot-password"
+            element={
+              !authUser ? (
+                <ForgotPasswordPage />
+              ) : (
+                <Navigate to="/login" replace />
+              )
+            }
+          />
+          <Route path="/friends" element={<FriendListPage />} />
+          <Route
+            path="/"
+            element={
+              authUser ? (
+                <HomePage isSocketReady={isSocketReady} />
+              ) : (
+                <Navigate to="/login" replace />
+              )
+            }
+          />
+          <Route
+            path="/contacts"
+            element={authUser ? <ContactsPage /> : <Navigate to="/login" />}
+          />
+          <Route
+            path="/settings"
+            element={
+              authUser ? <SettingsPage /> : <Navigate to="/login" replace />
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              authUser ? <ProfilePage /> : <Navigate to="/login" replace />
+            }
+          />
+          <Route
+            path="/search"
+            element={
+              authUser ? <SearchFriendPage /> : <Navigate to="/login" replace />
+            }
+          />
+          <Route
+            path="/add-friend"
+            element={
+              authUser ? <AddFriendPage /> : <Navigate to="/login" replace />
+            }
+          />
+          <Route
+            path="/friend-requests"
+            element={
+              authUser ? (
+                <FriendRequestsPage />
+              ) : (
+                <Navigate to="/login" replace />
+              )
+            }
+          />
+          <Route
+            path="/call/:id"
+            element={authUser ? <CallPage /> : <Navigate to="/login" replace />}
+          />
+        </Routes>
+      )}
       <IncomingCallNotification />
-<Toaster
-  position="top-right"
-  toastOptions={{
-    duration: 5000,
-    style: {
-      background: "#333",
-      color: "#fff",
-    },
-  }}
-/>
       <Toaster
         position="top-right"
         toastOptions={{

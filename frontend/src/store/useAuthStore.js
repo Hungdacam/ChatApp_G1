@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import axiosInstance from "../lib/axios";
 import { toast } from "react-hot-toast";
-
+import { useSocketStore } from "./useSocketStore";
 const useAuthStore = create((set) => ({
   authUser: null,
   isSigningUp: false,
@@ -15,18 +15,25 @@ const useAuthStore = create((set) => ({
   checkAuth: async () => {
     set({ isCheckingAuth: true });
     try {
-      const token = localStorage.getItem("authToken");
-      if (!token) {
-        set({ authUser: null }); // Không có token, coi như chưa đăng nhập
-        return;
-      }
-
-      const res = await axiosInstance.get("/auth/check");
+      console.log("Bắt đầu kiểm tra auth...");
+      const res = await axiosInstance.get("/auth/check", {
+        withCredentials: true,
+      });
+      console.log("Phản hồi từ server:", res.data);
       set({ authUser: res.data.user || res.data });
+      if (res.data.user?._id) {
+        localStorage.setItem("userId", res.data.user._id);
+        localStorage.setItem("userName", res.data.user.name || "");
+        localStorage.setItem("userAvatar", res.data.user.avatar || "");
+        // Kết nối socket
+        useSocketStore.getState().connectSocket(res.data.user._id);
+      }
     } catch (error) {
       console.log("Lỗi kiểm tra auth:", error.message);
       set({ authUser: null });
-      localStorage.removeItem("authToken"); // Xóa token nếu không hợp lệ
+      localStorage.removeItem("userId");
+      localStorage.removeItem("userName");
+      localStorage.removeItem("userAvatar");
     } finally {
       set({ isCheckingAuth: false });
     }
@@ -58,12 +65,7 @@ const useAuthStore = create((set) => ({
     try {
       const res = await axiosInstance.post("/auth/verify-signup", data);
       // Kiểm tra và lưu token nếu có
-      if (res.data.token) {
-        localStorage.setItem("authToken", res.data.token);
-        set({ authUser: res.data.user });
-      } else {
-        set({ authUser: null });
-      }
+      set({ authUser: res.data.user });
       set({ tempSignupData: null });
       toast.success("Tài khoản đã được tạo thành công! Vui lòng đăng nhập để tiếp tục.");
       navigate("/login");
@@ -86,18 +88,30 @@ const useAuthStore = create((set) => ({
         ...data,
         phone: data.phone.startsWith("+") ? data.phone : `+84${data.phone.replace(/^0/, "")}`,
       };
-      const res = await axiosInstance.post("/auth/login", formattedData);
+      const res = await axiosInstance.post("/auth/login", formattedData, {
+        withCredentials: true,
+      });
       console.log("Login response:", res.data); // Debug phản hồi từ backend
-      // Lưu token và cập nhật authUser
-      if (res.data.token) {
-        localStorage.setItem("authToken", res.data.token);
+      // Lưu thông tin user
+      if (res.data.user?._id) {
         localStorage.setItem("userId", res.data.user._id);
         localStorage.setItem("userName", res.data.user.name || "");
         localStorage.setItem("userAvatar", res.data.user.avatar || "");
       } else {
-        console.warn("Backend không trả về token!");
+        console.warn("Không tìm thấy user._id trong response!");
       }
+      // Chỉ lưu token cho mobile
+      if (import.meta.env.VITE_CLIENT_TYPE === "mobile" && res.data.token) {
+        localStorage.setItem("authToken", res.data.token);
+      } else if (import.meta.env.VITE_CLIENT_TYPE === "web") {
+        console.log("Web client: Token được lưu trong cookie HTTP-only");
+      }
+
       set({ authUser: res.data.user || res.data });
+      // Kết nối socket và fetch chat list
+      if (res.data.user?._id) {
+        useSocketStore.getState().connectSocket(res.data.user._id);
+      }
       toast.success("Đăng nhập thành công");
     } catch (error) {
       toast.error(error.response?.data?.message || "Đăng nhập thất bại");
@@ -116,7 +130,7 @@ logout: async () => {
     localStorage.removeItem("userId");
     localStorage.removeItem("userName");
     localStorage.removeItem("userAvatar");
-    
+    set({ authUser: null });
     // Clear call store
     if (window.useCallStore) {
       window.useCallStore.getState().resetClient();

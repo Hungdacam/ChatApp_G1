@@ -14,6 +14,8 @@ const cookieParser = require('cookie-parser');
 const dotenv = require('dotenv');
 const { connectDB } = require('./config/database');
 const contactRoutes = require('./routes/contact.route');
+
+const jwt = require('jsonwebtoken');
 const PORT = 3000;
 const app = express();
 
@@ -29,14 +31,16 @@ const allowedOrigins = [
 ];
 
 app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error("Not allowed by CORS"));
-    }
-  },
-  credentials: true
+       origin: (origin, callback) => {
+           if (!origin || allowedOrigins.includes(origin)) {
+               callback(null, true);
+           } else {
+               callback(new Error("Not allowed by CORS"));
+           }
+       },
+       credentials: true,
+       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+       allowedHeaders: ['Content-Type', 'Authorization', 'x-client-type']
 }));
 
 // 📦 Xử lý dữ liệu JSON và ảnh base64 có kích thước lớn
@@ -54,16 +58,34 @@ app.use('/api/contacts',contactRoutes)
 const server = http.createServer(app);
 
 const io = socketio(server, {
-  cors: {
-    origin: [
-      "http://localhost:5173",
-      "https://chat-app-g1.vercel.app"
-    ],
-    methods: ['GET', 'POST'],
-    credentials: true,
-  }
+       cors: {
+           origin: allowedOrigins,
+           methods: ['GET', 'POST'],
+           credentials: true,
+       },
+       transports: ['websocket'],
 });
 console.log("Socket.IO initialized");
+
+// Middleware xác thực Socket.IO
+io.use(async (socket, next) => {
+  try {
+    const cookie = socket.request.headers.cookie;
+    if (!cookie) {
+      return next(new Error('Authentication error: No cookie provided'));
+    }
+    const token = cookie.split('; ').find(row => row.startsWith('jwt=')).split('=')[1];
+    if (!token) {
+      return next(new Error('Authentication error: No token provided'));
+    }
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    socket.userId = decoded.userId;
+    next();
+  } catch (error) {
+    console.error('Socket auth error:', error);
+    return next(new Error('Authentication error: Invalid token'));
+  }
+});
 
 // Socket
 const onlineUsers = new Map();
@@ -76,6 +98,10 @@ io.on('connection', (socket) => {
     });
 
     socket.on("register", async (userId) => {
+        if (userId !== socket.userId) {
+          console.warn(`⚠️ Mismatch userId: received ${userId}, expected ${socket.userId}`);
+          return;
+        }
         onlineUsers.set(userId, socket.id);
         console.log("📥 Nhận được register:", userId);
         console.log(`📌 Đã lưu user ${userId} với socket ${socket.id}`);

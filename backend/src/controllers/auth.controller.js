@@ -111,8 +111,7 @@ const verifyAndSignup = async (req, res) => {
   }
 };
 
-// 📌 Đăng nhập
-// 📌 Đăng nhập
+// 📌 Đăng nhập6
 const login = async (req, res) => {
   const { phone, password } = req.body;
 
@@ -139,7 +138,7 @@ const login = async (req, res) => {
       return res.status(401).json({ message: "Mật khẩu không đúng" });
 
     const clientType = req.headers["x-client-type"] || "mobile";
-    const token = generateToken(user._id, res, clientType);
+    generateToken(user._id, res, clientType);
 
     const userData = {
       _id: user._id,
@@ -155,7 +154,6 @@ const login = async (req, res) => {
     // Trả về token cho cả web và mobile
     res.status(200).json({
       message: `Đăng nhập thành công (${clientType})`,
-      token,
       user: userData,
     });
   } catch (error) {
@@ -166,11 +164,12 @@ const login = async (req, res) => {
 
 // 📌 Đăng xuất (nếu dùng cookie cho web)
 const logout = (req, res) => {
-  res
-    .clearCookie("token")
-    .status(200)
-    .json({ message: "Đăng xuất thành công" });
-};
+       res.clearCookie("jwt", {
+           httpOnly: true,
+           secure: process.env.NODE_ENV === 'production',
+           sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+       }).status(200).json({ message: "Đăng xuất thành công" });
+   };
 
 // 📌 Cập nhật hồ sơ
 const updateProfile = async (req, res) => {

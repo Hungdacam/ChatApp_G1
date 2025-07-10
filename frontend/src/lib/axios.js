@@ -9,13 +9,13 @@ const axiosInstance = axios.create({
 });
 
 axiosInstance.interceptors.request.use(
-  config => {
-    const token = localStorage.getItem("authToken");
-    if (token) config.headers.Authorization = `Bearer ${token}`;
-    if (!(config.data instanceof FormData)) config.headers["Content-Type"] = "application/json";
-    return config;
-  },
-  error => Promise.reject(error)
-);
+       config => {
+           if (!(config.data instanceof FormData)) {
+               config.headers["Content-Type"] = "application/json";
+           }
+           return config;
+       },
+       error => Promise.reject(error)
+   );
 
 export default axiosInstance;
