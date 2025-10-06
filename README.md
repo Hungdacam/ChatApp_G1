@@ -155,8 +155,4 @@ docker-compose -f docker-compose.prod.yml up --build
 
 ## 🌈 Happy Connecting!
 - 💬 "Mỗi tin nhắn là một câu chuyện!"  
-<<<<<<< HEAD
 - 🚀 "Code sạch, kết nối mượt!"
-=======
-- 🚀 "Code sạch, kết nối mượt!"
->>>>>>> 6bfc9e594f2238d6f3b118e163ed14d8841ca8e8
